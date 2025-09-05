@@ -43,7 +43,7 @@ export async function getDefaultProfileId(): Promise<string> {
   return ensureDefaultProfile();
 }
 
-// ---- Recipes API ----
+// Create
 export async function createRecipe(
   profileId: string,
   r: Omit<Recipe,'id'|'version'|'created_at_ms'|'updated_at_ms'|'profile_id'>
@@ -71,6 +71,7 @@ export async function createRecipe(
   return id;
 }
 
+// List / Search
 export async function searchRecipes(profileId: string, prefix: string) {
   const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
   const q = prefix.trim().toLowerCase();
@@ -89,8 +90,28 @@ export async function listRecipes(profileId: string) {
     .slice(0,200);
 }
 
-// NEW: fetch a single recipe by id (used for editing entries)
+// Get one
 export async function getRecipeById(recipeId: string): Promise<Recipe | undefined> {
   const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
   return list.find(r => r.id === recipeId);
+}
+
+// UPDATE (edit recipe fields; bump updated_at_ms)
+export async function updateRecipe(
+  recipeId: string,
+  updates: Partial<Pick<Recipe, 'name' | 'total_weight_g' | 'calories' | 'protein_mg' | 'carbs_mg' | 'fat_mg'>>
+) {
+  const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
+  const idx = list.findIndex(r => r.id === recipeId);
+  if (idx === -1) throw new Error('Recipe not found');
+
+  const current = list[idx];
+  const next: Recipe = {
+    ...current,
+    ...updates,
+    updated_at_ms: Date.now(),
+  };
+  list[idx] = next;
+  saveJSON(RECIPES_KEY, list);
+  return true;
 }
