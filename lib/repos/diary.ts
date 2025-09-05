@@ -1,14 +1,13 @@
 // lib/repos/diary.ts
 'use client';
 import { diaryDayLocalFromUtcMs } from '../utils/dayBoundary';
-import { getRecipeById } from './recipes';
 
 export type DiaryEntry = {
   id: string;
   profile_id: string;
   logged_at_utc_ms: number;
   recipe_id?: string | null;
-  label?: string | null;
+  label?: string | null;              // recipe name (stored for display)
   amount_weight_g?: number | null;
   calories: number;
   protein_mg: number;
@@ -33,6 +32,12 @@ function defaultProfileId(): string {
   const profiles = loadJSON<{id:string,name:string,created_at_ms:number}[]>(PROFILES_KEY, []);
   return profiles[0]?.id || 'default';
 }
+function recipeNameById(recipeId: string | null | undefined): string | null {
+  if (!recipeId) return null;
+  const recipes = loadJSON<any[]>(RECIPES_KEY, []);
+  const r = recipes.find(x => x.id === recipeId);
+  return r ? r.name as string : null;
+}
 
 // Create entry from recipe (used by +Add)
 export async function addEntryFromRecipe(
@@ -48,7 +53,7 @@ export async function addEntryFromRecipe(
     profile_id: profileId || defaultProfileId(),
     logged_at_utc_ms: loggedAtUtcMs,
     recipe_id: recipeId,
-    label: null,
+    label: r.name,                    // <-- store the recipe name
     amount_weight_g: amountWeightG,
     calories: Math.round(r.calories * scale),
     protein_mg: Math.round(r.protein_mg * scale),
@@ -64,10 +69,22 @@ export async function addEntryFromRecipe(
   return entry.id;
 }
 
-// List entries for a given day
+// List entries for a given day (also backfill missing labels)
 export async function listByDay(profileId: string, diaryDayLocal: string) {
-  const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
-  return entries
+  const all = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
+
+  // Backfill labels for any older entries that missed the recipe name
+  let mutated = false;
+  for (const e of all) {
+    if (!e.label && e.recipe_id) {
+      const nm = recipeNameById(e.recipe_id);
+      if (nm) { e.label = nm; mutated = true; }
+    }
+  }
+  if (mutated) saveJSON(ENTRIES_KEY, all);
+
+  // Return entries for the requested day/profile
+  return all
     .filter(e => e.profile_id === (profileId || defaultProfileId()) && e.diary_day_local === diaryDayLocal)
     .sort((a,b)=>b.created_at_ms - a.created_at_ms);
 }
@@ -79,7 +96,7 @@ export async function sumTotals(entries: DiaryEntry[]) {
   return { calories:c, protein_g:(p/1000), carbs_g:(carb/1000), fat_g:(f/1000) };
 }
 
-// NEW: delete an entry by id
+// Delete an entry by id
 export async function deleteEntry(entryId: string) {
   const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
   const next = entries.filter(e => e.id !== entryId);
@@ -87,9 +104,9 @@ export async function deleteEntry(entryId: string) {
   return entries.length !== next.length; // true if something was deleted
 }
 
-// NEW: edit entry grams (recompute frozen totals)
-// - Keeps the original logged_at_utc_ms and diary_day_local (does NOT move the entry across days)
-// - Requires entry to be from a recipe (recipe_id must exist)
+// Edit entry grams (recompute frozen totals)
+// - Keeps original time/day (does NOT move across days)
+// - Only for recipe-based entries
 export async function updateEntryWeight(entryId: string, newWeightG: number) {
   if (!Number.isFinite(newWeightG) || newWeightG <= 0) throw new Error('Weight must be a positive number');
 
@@ -100,7 +117,8 @@ export async function updateEntryWeight(entryId: string, newWeightG: number) {
   const entry = entries[idx];
   if (!entry.recipe_id) throw new Error('Only recipe-based entries can be edited');
 
-  const r = await getRecipeById(entry.recipe_id);
+  const recipes = loadJSON<any[]>(RECIPES_KEY, []);
+  const r = recipes.find(x => x.id === entry.recipe_id);
   if (!r) throw new Error('Recipe not found for this entry');
 
   const scale = newWeightG / r.total_weight_g;
@@ -109,6 +127,7 @@ export async function updateEntryWeight(entryId: string, newWeightG: number) {
   entry.protein_mg = Math.round(r.protein_mg * scale);
   entry.carbs_mg = Math.round(r.carbs_mg * scale);
   entry.fat_mg = Math.round(r.fat_mg * scale);
+  if (!entry.label) entry.label = r.name;   // ensure label exists after edit
 
   entries[idx] = entry;
   saveJSON(ENTRIES_KEY, entries);
