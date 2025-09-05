@@ -1,24 +1,40 @@
 // lib/db/sql.ts
 'use client';
 
-import initSqlJs from 'sql.js';
+/**
+ * Browser-only SQLite (sql.js) with OPFS + localStorage persistence.
+ * - Dynamic import so Next/Vercel don't try to bundle Node 'fs'.
+ * - Exposes: getDb(), rows()
+ */
 
-type SQL = Awaited<ReturnType<typeof initSqlJs>>;
-let dbPromise: Promise<any> | null = null;
+// ---------- dynamic loader for sql.js (client only) ----------
+let _initSqlJs: any;
+async function loadSqlJs() {
+  if (!_initSqlJs) {
+    const m = await import('sql.js'); // dynamic import in the browser
+    _initSqlJs = m.default || m;
+  }
+  return _initSqlJs;
+}
+
+// ---------- types / singletons ----------
+type SQL = any;
+let dbPromise: Promise<{ SQL: SQL; db: any; persist: () => Promise<void> }> | null = null;
 
 const DB_FILENAME = 'calorie-meter.db';
 const LOCALSTORAGE_KEY = 'calorie-meter-db-bytes-v1';
 
+// ---------- persistence helpers ----------
 async function loadFromOPFS(): Promise<Uint8Array | null> {
   try {
-    // @ts-ignore
+    // @ts-ignore - not in TS lib yet
     const root = await (navigator as any).storage.getDirectory();
     const handle = await root.getFileHandle(DB_FILENAME).catch(() => null);
     if (!handle) return null;
     const file = await handle.getFile();
     const buf = await file.arrayBuffer();
     return new Uint8Array(buf);
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -31,8 +47,8 @@ async function saveToOPFS(bytes: Uint8Array): Promise<void> {
     const writable = await handle.createWritable();
     await writable.write(bytes);
     await writable.close();
-  } catch (e) {
-    // ignore
+  } catch {
+    // ignore (falls back to localStorage anyway)
   }
 }
 
@@ -42,44 +58,60 @@ function loadFromLocalStorage(): Uint8Array | null {
     if (!b64) return null;
     const raw = atob(b64);
     const arr = new Uint8Array(raw.length);
-    for (let i=0;i<raw.length;i++) arr[i] = raw.charCodeAt(i);
+    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
     return arr;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function saveToLocalStorage(bytes: Uint8Array) {
   try {
     let str = '';
-    for (let i=0;i<bytes.length;i++) str += String.fromCharCode(bytes[i]);
+    for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
     const b64 = btoa(str);
     localStorage.setItem(LOCALSTORAGE_KEY, b64);
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
+// ---------- public helpers ----------
+export function rows(res: any[]) {
+  if (!res || !res[0]) return [];
+  const { columns, values } = res[0];
+  return values.map((row: any[]) => Object.fromEntries(row.map((v, i) => [columns[i], v])));
+}
+
+// ---------- DB init & migrations ----------
 async function initDbInternal() {
+  const initSqlJs = await loadSqlJs();
   const SQL = await initSqlJs({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/${file}`
+    locateFile: (file: string) =>
+      `https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/${file}`,
   });
 
-  // Try OPFS, then localStorage
+  // Load existing DB if present (OPFS > localStorage), else new
   let dbBytes = await loadFromOPFS();
   if (!dbBytes) dbBytes = loadFromLocalStorage();
-
   const db = dbBytes ? new SQL.Database(dbBytes) : new SQL.Database();
 
-  // migrations
+  // Schema (matches our v1 spec)
   db.exec(`
     PRAGMA journal_mode=MEMORY;
+
     CREATE TABLE IF NOT EXISTS profile (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       created_at_ms INTEGER NOT NULL
     );
+
     CREATE TABLE IF NOT EXISTS app_setting (
       id INTEGER PRIMARY KEY,
       day_boundary_hour INTEGER NOT NULL DEFAULT 2,
       timezone TEXT NOT NULL DEFAULT 'Asia/Kolkata'
     );
+
     CREATE TABLE IF NOT EXISTS recipe (
       id TEXT PRIMARY KEY,
       profile_id TEXT NOT NULL,
@@ -94,6 +126,7 @@ async function initDbInternal() {
       updated_at_ms INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_recipe_profile_name ON recipe(profile_id, name);
+
     CREATE TABLE IF NOT EXISTS diary_entry (
       id TEXT PRIMARY KEY,
       profile_id TEXT NOT NULL,
@@ -112,42 +145,38 @@ async function initDbInternal() {
     CREATE INDEX IF NOT EXISTS idx_diary_logged ON diary_entry(profile_id, logged_at_utc_ms);
   `);
 
-  // Ensure one default setting row
-  const settings = db.exec(`SELECT COUNT(*) as c FROM app_setting`);
-  if (!settings[0] || settings[0].values[0][0] === 0) {
+  // Seed a single settings row if none
+  const s = db.exec(`SELECT COUNT(*) AS c FROM app_setting`);
+  if (!s[0] || s[0].values[0][0] === 0) {
     db.run(`INSERT INTO app_setting(id, day_boundary_hour, timezone) VALUES (1, 2, 'Asia/Kolkata')`);
   }
 
-  // Ensure a default profile "Sid" if none
-  const p = db.exec(`SELECT COUNT(*) as c FROM profile`);
+  // Seed one default profile if none
+  const p = db.exec(`SELECT COUNT(*) AS c FROM profile`);
   if (!p[0] || p[0].values[0][0] === 0) {
-    const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
-    db.run(`INSERT INTO profile(id,name,created_at_ms) VALUES (?,?,?)`, [id, 'Sid', Date.now()]);
+    const id = (globalThis.crypto && 'randomUUID' in globalThis.crypto)
+      ? (globalThis.crypto as any).randomUUID()
+      : String(Date.now());
+    db.run(`INSERT INTO profile(id, name, created_at_ms) VALUES (?,?,?)`, [id, 'Sid', Date.now()]);
   }
 
+  // Persist helper (OPFS + localStorage)
   async function persist() {
-    const bytes = db.export();
+    const bytes: Uint8Array = db.export();
     await saveToOPFS(bytes);
     saveToLocalStorage(bytes);
   }
 
-  // Save on unload
+  // Save on tab close
   if (typeof window !== 'undefined') {
-    window.addEventListener('beforeunload', () => { persist(); });
-    // Also save every 5s after a write (throttled by caller)
+    window.addEventListener('beforeunload', () => { void persist(); });
   }
 
   return { SQL, db, persist };
 }
 
+// Public entry — returns { SQL, db, persist }
 export async function getDb() {
   if (!dbPromise) dbPromise = initDbInternal();
   return dbPromise;
-}
-
-// Helpers
-export function rows(res: any[]) {
-  if (!res || !res[0]) return [];
-  const { columns, values } = res[0];
-  return values.map((row: any[]) => Object.fromEntries(row.map((v,i)=>[columns[i], v])));
 }
