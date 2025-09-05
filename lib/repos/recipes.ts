@@ -2,7 +2,7 @@
 'use client';
 
 // ---- localStorage helpers ----
-type CMRecipe = {
+export type Recipe = {
   id: string;
   profile_id: string;
   name: string;
@@ -44,8 +44,6 @@ export async function getDefaultProfileId(): Promise<string> {
 }
 
 // ---- Recipes API ----
-export type Recipe = CMRecipe;
-
 export async function createRecipe(
   profileId: string,
   r: Omit<Recipe,'id'|'version'|'created_at_ms'|'updated_at_ms'|'profile_id'>
@@ -55,7 +53,7 @@ export async function createRecipe(
     : String(Date.now());
   const now = Date.now();
 
-  const list = loadJSON<CMRecipe[]>(RECIPES_KEY, []);
+  const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
   list.push({
     id,
     profile_id: profileId || ensureDefaultProfile(),
@@ -74,7 +72,7 @@ export async function createRecipe(
 }
 
 export async function searchRecipes(profileId: string, prefix: string) {
-  const list = loadJSON<CMRecipe[]>(RECIPES_KEY, []);
+  const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
   const q = prefix.trim().toLowerCase();
   return list
     .filter(r => (r.profile_id === (profileId || ensureDefaultProfile())) &&
@@ -84,9 +82,15 @@ export async function searchRecipes(profileId: string, prefix: string) {
 }
 
 export async function listRecipes(profileId: string) {
-  const list = loadJSON<CMRecipe[]>(RECIPES_KEY, []);
+  const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
   return list
     .filter(r => r.profile_id === (profileId || ensureDefaultProfile()))
     .sort((a,b)=>b.updated_at_ms - a.updated_at_ms)
     .slice(0,200);
+}
+
+// NEW: fetch a single recipe by id (used for editing entries)
+export async function getRecipeById(recipeId: string): Promise<Recipe | undefined> {
+  const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
+  return list.find(r => r.id === recipeId);
 }
