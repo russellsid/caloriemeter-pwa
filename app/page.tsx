@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { getDefaultProfileId } from '../lib/repos/recipes';
-import { listByDay, sumTotals, DiaryEntry } from '../lib/repos/diary';
+import { listByDay, sumTotals, DiaryEntry, deleteEntry, updateEntryWeight } from '../lib/repos/diary';
 import { todayDiaryDay } from '../lib/utils/dayBoundary';
 
 export default function Home() {
@@ -10,24 +10,53 @@ export default function Home() {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [totals, setTotals] = useState<{calories:number,protein_g:number,carbs_g:number,fat_g:number}>();
 
+  async function refresh(pid?: string) {
+    const p = pid || profileId || await getDefaultProfileId();
+    const d = todayDiaryDay(2);
+    setDay(d);
+    const es = await listByDay(p, d);
+    setEntries(es);
+    const t = await sumTotals(es);
+    setTotals(t);
+  }
+
   useEffect(() => {
     (async () => {
       const pid = await getDefaultProfileId();
       setProfileId(pid);
-      const d = todayDiaryDay(2);
-      setDay(d);
-      const es = await listByDay(pid, d);
-      setEntries(es);
-      const t = await sumTotals(es);
-      setTotals(t);
+      await refresh(pid);
     })();
   }, []);
 
+  async function onDelete(entryId: string) {
+    const ok = confirm('Delete this entry?');
+    if (!ok) return;
+    await deleteEntry(entryId);
+    await refresh();
+  }
+
+  async function onEdit(entry: DiaryEntry) {
+    const current = entry.amount_weight_g ?? 0;
+    const gramsStr = prompt(`Edit grams for this entry`, String(current || 100));
+    if (!gramsStr) return;
+    const grams = parseInt(gramsStr, 10);
+    if (!Number.isFinite(grams) || grams <= 0) { alert('Enter a positive number in grams'); return; }
+    try {
+      await updateEntryWeight(entry.id, grams);
+      await refresh();
+    } catch (e: any) {
+      alert(e?.message || String(e));
+    }
+  }
+
   return (
     <main>
-      <div className="header">
+      <div className="header" style={{marginBottom: 12}}>
         <h1>Calorie Meter</h1>
-        <a className="btn" href="/add">+ Add</a>
+        <div className="row">
+          <a className="btn" href="/add">+ Add</a>
+          <a className="btn" href="/recipes">Recipes</a>
+        </div>
       </div>
 
       <div className="card">
@@ -38,17 +67,27 @@ export default function Home() {
 
       <div className="card">
         <h3>Entries</h3>
-        {entries.length === 0 ? <p className="small">No entries yet. Tap + Add to log something.</p> :
+        {entries.length === 0 ? (
+          <p className="small">No entries yet. Tap + Add to log something.</p>
+        ) : (
           <div className="grid">
             {entries.map(e => (
               <div key={e.id} className="card">
-                <div><b>{e.label || 'Recipe'}</b></div>
-                <div className="small">{e.amount_weight_g ?? '-'} g · {e.calories} kcal</div>
-                <div className="small">P {((e.protein_mg)/1000).toFixed(1)}g · C {((e.carbs_mg)/1000).toFixed(1)}g · F {((e.fat_mg)/1000).toFixed(1)}g</div>
+                <div className="row" style={{justifyContent:'space-between', alignItems:'baseline'}}>
+                  <div>
+                    <div><b>{e.label || 'Recipe entry'}</b></div>
+                    <div className="small">{e.amount_weight_g ?? '-'} g · {e.calories} kcal</div>
+                    <div className="small">P {((e.protein_mg)/1000).toFixed(1)}g · C {((e.carbs_mg)/1000).toFixed(1)}g · F {((e.fat_mg)/1000).toFixed(1)}g</div>
+                  </div>
+                  <div className="row" style={{gap:8}}>
+                    <button className="btn" onClick={()=>onEdit(e)} type="button">Edit</button>
+                    <button className="btn" onClick={()=>onDelete(e.id)} type="button">Delete</button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
-        }
+        )}
       </div>
     </main>
   );
