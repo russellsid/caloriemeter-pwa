@@ -21,16 +21,21 @@ export default function Recipes() {
   return (
     <main>
       <h1>Recipes</h1>
-      <div className="row">
-        <a className="btn" href="/recipes/new">New Recipe</a>
+      <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+        <a className="btn" href="/recipes/new">+ New Recipe</a>
         <input className="input" placeholder="Search recipes..." value={query} onChange={e=>setQuery(e.target.value)} />
       </div>
       <div className="grid">
         {items.map(r => (
           <div className="card" key={r.id}>
-            <div><b>{r.name}</b></div>
-            <div className="small">{r.total_weight_g} g · {r.calories} kcal</div>
-            <div className="small">P {(r.protein_mg/1000).toFixed(1)}g · C {(r.carbs_mg/1000).toFixed(1)}g · F {(r.fat_mg/1000).toFixed(1)}g</div>
+            <div className="row" style={{ justifyContent:'space-between', alignItems:'baseline' }}>
+              <div>
+                <div><b>{r.name}</b></div>
+                <div className="small">{r.total_weight_g} g · {r.calories} kcal</div>
+                <div className="small">P {(r.protein_mg/1000).toFixed(1)}g · C {(r.carbs_mg/1000).toFixed(1)}g · F {(r.fat_mg/1000).toFixed(1)}g</div>
+              </div>
+              <a className="btn" href={`/recipes/${r.id}/edit`}>Edit</a>
+            </div>
           </div>
         ))}
       </div>
