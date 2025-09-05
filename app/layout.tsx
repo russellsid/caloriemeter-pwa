@@ -1,5 +1,6 @@
-export const metadata = { title: "Calorie Meter", description: "Local-first macro & calorie tracker PWA" };
+export const metadata = { title: "Calorie Meter", description: "Local-first calorie & macro tracker" };
 import "./globals.css";
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -11,8 +12,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="theme-color" content="#000000" />
       </head>
       <body>
-        <script dangerouslySetInnerHTML={{__html:`if ('serviceWorker' in navigator) { window.addEventListener('load', function(){ navigator.serviceWorker.register('/service-worker.js'); }); }`}} />
-        <div style={{maxWidth: 800, margin: '0 auto', padding: 16}}>{children}</div>
+        <script dangerouslySetInnerHTML={{__html:`
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function(){ navigator.serviceWorker.register('/service-worker.js'); });
+          }`}} />
+        <div style={{maxWidth: 900, margin: '0 auto', padding: 16}}>
+          {children}
+        </div>
       </body>
     </html>
   );

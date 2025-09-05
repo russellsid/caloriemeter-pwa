@@ -1,0 +1,39 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { listRecipes, searchRecipes, getDefaultProfileId, Recipe } from '../../lib/repos/recipes';
+
+export default function Recipes() {
+  const [profileId, setProfileId] = useState<string>('');
+  const [query, setQuery] = useState('');
+  const [items, setItems] = useState<Recipe[]>([]);
+
+  useEffect(() => { (async () => {
+    const pid = await getDefaultProfileId(); setProfileId(pid);
+    const r = await listRecipes(pid); setItems(r);
+  })(); }, []);
+
+  useEffect(() => { (async () => {
+    if (!profileId) return;
+    if (query.length === 0) { const r = await listRecipes(profileId); setItems(r); return; }
+    const r = await searchRecipes(profileId, query); setItems(r);
+  })(); }, [query, profileId]);
+
+  return (
+    <main>
+      <h1>Recipes</h1>
+      <div className="row">
+        <a className="btn" href="/recipes/new">New Recipe</a>
+        <input className="input" placeholder="Search recipes..." value={query} onChange={e=>setQuery(e.target.value)} />
+      </div>
+      <div className="grid">
+        {items.map(r => (
+          <div className="card" key={r.id}>
+            <div><b>{r.name}</b></div>
+            <div className="small">{r.total_weight_g} g · {r.calories} kcal</div>
+            <div className="small">P {(r.protein_mg/1000).toFixed(1)}g · C {(r.carbs_mg/1000).toFixed(1)}g · F {(r.fat_mg/1000).toFixed(1)}g</div>
+          </div>
+        ))}
+      </div>
+    </main>
+  );
+}

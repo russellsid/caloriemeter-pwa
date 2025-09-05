@@ -1,6 +1,7 @@
 {
   "name": "Calorie Meter",
   "short_name": "CalorieMeter",
+  "description": "Local-first macro & calorie tracker with 2 AM day boundary.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
