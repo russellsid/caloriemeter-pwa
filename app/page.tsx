@@ -3,12 +3,14 @@ import { useEffect, useState } from 'react';
 import { getDefaultProfileId } from '../lib/repos/recipes';
 import { listByDay, sumTotals, DiaryEntry, deleteEntry, updateEntryWeight } from '../lib/repos/diary';
 import { todayDiaryDay } from '../lib/utils/dayBoundary';
+import { getRecipeById, Recipe } from '../lib/repos/recipes';
 
 export default function Home() {
   const [profileId, setProfileId] = useState<string>('');
   const [day, setDay] = useState<string>('');
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [totals, setTotals] = useState<{calories:number,protein_g:number,carbs_g:number,fat_g:number}>();
+  const [nameCache, setNameCache] = useState<Record<string,string>>({});
 
   async function refresh(pid?: string) {
     const p = pid || profileId || await getDefaultProfileId();
@@ -27,6 +29,27 @@ export default function Home() {
       await refresh(pid);
     })();
   }, []);
+
+  // Backfill names for entries that have no label yet
+  useEffect(() => {
+    (async () => {
+      const missing = entries
+        .filter(e => !e.label && e.recipe_id)
+        .map(e => e.recipe_id as string)
+        .filter(id => !(id in nameCache));
+
+      if (missing.length === 0) return;
+
+      const updates: Record<string,string> = {};
+      for (const id of missing) {
+        const r: Recipe | undefined = await getRecipeById(id);
+        if (r) updates[id] = r.name;
+      }
+      if (Object.keys(updates).length) {
+        setNameCache(prev => ({ ...prev, ...updates }));
+      }
+    })();
+  }, [entries, nameCache]);
 
   async function onDelete(entryId: string) {
     const ok = confirm('Delete this entry?');
@@ -47,6 +70,12 @@ export default function Home() {
     } catch (e: any) {
       alert(e?.message || String(e));
     }
+  }
+
+  function entryName(e: DiaryEntry) {
+    if (e.label) return e.label;
+    if (e.recipe_id && nameCache[e.recipe_id]) return nameCache[e.recipe_id];
+    return 'Recipe entry';
   }
 
   return (
@@ -75,7 +104,7 @@ export default function Home() {
               <div key={e.id} className="card">
                 <div className="row" style={{justifyContent:'space-between', alignItems:'baseline'}}>
                   <div>
-                    <div><b>{e.label || 'Recipe entry'}</b></div>
+                    <div><b>{entryName(e)}</b></div>
                     <div className="small">{e.amount_weight_g ?? '-'} g · {e.calories} kcal</div>
                     <div className="small">P {((e.protein_mg)/1000).toFixed(1)}g · C {((e.carbs_mg)/1000).toFixed(1)}g · F {((e.fat_mg)/1000).toFixed(1)}g</div>
                   </div>
