@@ -1,6 +1,7 @@
 // lib/repos/diary.ts
 'use client';
 import { diaryDayLocalFromUtcMs } from '../utils/dayBoundary';
+import { getRecipeById } from './recipes';
 
 export type DiaryEntry = {
   id: string;
@@ -33,6 +34,7 @@ function defaultProfileId(): string {
   return profiles[0]?.id || 'default';
 }
 
+// Create entry from recipe (used by +Add)
 export async function addEntryFromRecipe(
   profileId: string, recipeId: string, amountWeightG: number, loggedAtUtcMs: number
 ) {
@@ -62,6 +64,7 @@ export async function addEntryFromRecipe(
   return entry.id;
 }
 
+// List entries for a given day
 export async function listByDay(profileId: string, diaryDayLocal: string) {
   const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
   return entries
@@ -69,8 +72,45 @@ export async function listByDay(profileId: string, diaryDayLocal: string) {
     .sort((a,b)=>b.created_at_ms - a.created_at_ms);
 }
 
+// Totals helper
 export async function sumTotals(entries: DiaryEntry[]) {
   let c=0,p=0,carb=0,f=0;
   for (const e of entries) { c+=e.calories; p+=e.protein_mg; carb+=e.carbs_mg; f+=e.fat_mg; }
   return { calories:c, protein_g:(p/1000), carbs_g:(carb/1000), fat_g:(f/1000) };
+}
+
+// NEW: delete an entry by id
+export async function deleteEntry(entryId: string) {
+  const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
+  const next = entries.filter(e => e.id !== entryId);
+  saveJSON(ENTRIES_KEY, next);
+  return entries.length !== next.length; // true if something was deleted
+}
+
+// NEW: edit entry grams (recompute frozen totals)
+// - Keeps the original logged_at_utc_ms and diary_day_local (does NOT move the entry across days)
+// - Requires entry to be from a recipe (recipe_id must exist)
+export async function updateEntryWeight(entryId: string, newWeightG: number) {
+  if (!Number.isFinite(newWeightG) || newWeightG <= 0) throw new Error('Weight must be a positive number');
+
+  const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
+  const idx = entries.findIndex(e => e.id === entryId);
+  if (idx === -1) throw new Error('Entry not found');
+
+  const entry = entries[idx];
+  if (!entry.recipe_id) throw new Error('Only recipe-based entries can be edited');
+
+  const r = await getRecipeById(entry.recipe_id);
+  if (!r) throw new Error('Recipe not found for this entry');
+
+  const scale = newWeightG / r.total_weight_g;
+  entry.amount_weight_g = newWeightG;
+  entry.calories = Math.round(r.calories * scale);
+  entry.protein_mg = Math.round(r.protein_mg * scale);
+  entry.carbs_mg = Math.round(r.carbs_mg * scale);
+  entry.fat_mg = Math.round(r.fat_mg * scale);
+
+  entries[idx] = entry;
+  saveJSON(ENTRIES_KEY, entries);
+  return true;
 }
