@@ -17,27 +17,62 @@ export type Recipe = {
   updated_at_ms: number;
 };
 
-export async function createRecipe(profileId: string, r: Omit<Recipe,'id'|'version'|'created_at_ms'|'updated_at_ms'|'profile_id'>) {
+export async function createRecipe(
+  profileId: string,
+  r: Omit<
+    Recipe,
+    'id' | 'version' | 'created_at_ms' | 'updated_at_ms' | 'profile_id'
+  >
+) {
   const { db, persist } = await getDb();
-  const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+  const id =
+    globalThis.crypto && 'randomUUID' in globalThis.crypto
+      ? (globalThis.crypto as any).randomUUID()
+      : String(Date.now());
   const now = Date.now();
-  db.run(`INSERT INTO recipe(id, profile_id, name, total_weight_g, calories, protein_mg, carbs_mg, fat_mg, version, created_at_ms, updated_at_ms)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [id, profileId, r.name, r.total_weight_g, r.calories, r.protein_mg, r.carbs_mg, r.fat_mg, 1, now, now]);
-  await persist();
+
+  // Insert
+  db.run(
+    `INSERT INTO recipe
+      (id, profile_id, name, total_weight_g, calories, protein_mg, carbs_mg, fat_mg, version, created_at_ms, updated_at_ms)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      id,
+      profileId || 'default',
+      r.name,
+      r.total_weight_g,
+      r.calories,
+      r.protein_mg,
+      r.carbs_mg,
+      r.fat_mg,
+      1,
+      now,
+      now,
+    ]
+  );
+
+  // Fire-and-forget persistence so UI never “hangs”
+  Promise.resolve(persist()).catch(() => { /* ignore */ });
+
   return id;
 }
 
 export async function searchRecipes(profileId: string, prefix: string) {
   const { db } = await getDb();
   const q = `%${prefix.toLowerCase()}%`;
-  const res = db.exec(`SELECT * FROM recipe WHERE profile_id = ? AND LOWER(name) LIKE ? ORDER BY name LIMIT 50`, [profileId, q]);
+  const res = db.exec(
+    `SELECT * FROM recipe WHERE profile_id = ? AND LOWER(name) LIKE ? ORDER BY name LIMIT 50`,
+    [profileId || 'default', q]
+  );
   return rows(res) as Recipe[];
 }
 
 export async function listRecipes(profileId: string) {
   const { db } = await getDb();
-  const res = db.exec(`SELECT * FROM recipe WHERE profile_id = ? ORDER BY updated_at_ms DESC LIMIT 200`, [profileId]);
+  const res = db.exec(
+    `SELECT * FROM recipe WHERE profile_id = ? ORDER BY updated_at_ms DESC LIMIT 200`,
+    [profileId || 'default']
+  );
   return rows(res) as Recipe[];
 }
 
