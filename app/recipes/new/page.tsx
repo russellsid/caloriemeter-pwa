@@ -15,44 +15,41 @@ export default function NewRecipe() {
 
   useEffect(() => {
     (async () => {
-      await warmup(); // wake DB on mount
+      await warmup(); // wake DB
       const pid = await getDefaultProfileId();
       setProfileId(pid || 'default');
     })();
   }, []);
 
-  async function save() {
+  async function onSaveClick() {
+    // 🔔 Prove the button is clickable
+    alert('Saving recipe…');
+
     try {
-      // Ensure DB awake & profile available even if useEffect hasn't finished
       const pid = profileId || (await getDefaultProfileId()) || 'default';
-      await warmup();
 
+      // Validate
       if (!name.trim()) throw new Error('Enter a name');
-      if (!Number.isFinite(totalWeightG) || totalWeightG <= 0)
-        throw new Error('Total weight must be positive');
-      if (!Number.isFinite(calories) || calories < 0)
-        throw new Error('Calories must be ≥ 0');
+      const weight = Number(totalWeightG);
+      const kcal = Number(calories);
+      if (!Number.isFinite(weight) || weight <= 0) throw new Error('Total weight must be positive');
+      if (!Number.isFinite(kcal) || kcal < 0) throw new Error('Calories must be ≥ 0');
 
-      const pMg = Math.round(parseFloat(protein || '0') * 1000);
-      const cMg = Math.round(parseFloat(carbs || '0') * 1000);
-      const fMg = Math.round(parseFloat(fat || '0') * 1000);
+      const pMg = Math.round(Number(protein || '0') * 1000);
+      const cMg = Math.round(Number(carbs || '0') * 1000);
+      const fMg = Math.round(Number(fat || '0') * 1000);
 
       setSaving(true);
 
-      // Safety timeout: if DB takes too long, we still proceed and then verify
-      const id = await Promise.race([
-        createRecipe(pid, {
-          name,
-          total_weight_g: totalWeightG,
-          calories,
-          protein_mg: pMg,
-          carbs_mg: cMg,
-          fat_mg: fMg,
-        } as any),
-        new Promise<string>((_, reject) =>
-          setTimeout(() => reject(new Error('Saving took too long')), 6000)
-        ),
-      ]);
+      // Create (don’t block on background persistence)
+      await createRecipe(pid, {
+        name,
+        total_weight_g: weight,
+        calories: kcal,
+        protein_mg: pMg,
+        carbs_mg: cMg,
+        fat_mg: fMg,
+      } as any);
 
       setSaving(false);
       alert('Recipe saved!');
@@ -69,25 +66,37 @@ export default function NewRecipe() {
       <div className="card">
         <label>Name</label>
         <input className="input" value={name} onChange={(e)=>setName(e.target.value)} placeholder="Paneer Bowl" />
+
         <label>Total recipe weight (g)</label>
-        <input className="input" type="number" value={totalWeightG} onChange={(e)=>setTotalWeightG(parseInt(e.target.value||'0',10))} />
+        <input className="input" inputMode="numeric" type="number"
+               value={totalWeightG} onChange={(e)=>setTotalWeightG(Number(e.target.value || '0'))} />
+
         <label>Calories (kcal)</label>
-        <input className="input" type="number" value={calories} onChange={(e)=>setCalories(parseInt(e.target.value||'0',10))} />
+        <input className="input" inputMode="numeric" type="number"
+               value={calories} onChange={(e)=>setCalories(Number(e.target.value || '0'))} />
+
         <div className="row">
           <div style={{flex:1}}>
             <label>Protein (g)</label>
-            <input className="input" value={protein} onChange={(e)=>setProtein(e.target.value)} />
+            <input className="input" inputMode="decimal"
+                   value={protein} onChange={(e)=>setProtein(e.target.value)} />
           </div>
           <div style={{flex:1}}>
             <label>Carbs (g)</label>
-            <input className="input" value={carbs} onChange={(e)=>setCarbs(e.target.value)} />
+            <input className="input" inputMode="decimal"
+                   value={carbs} onChange={(e)=>setCarbs(e.target.value)} />
           </div>
           <div style={{flex:1}}>
             <label>Fat (g)</label>
-            <input className="input" value={fat} onChange={(e)=>setFat(e.target.value)} />
+            <input className="input" inputMode="decimal"
+                   value={fat} onChange={(e)=>setFat(e.target.value)} />
           </div>
         </div>
-        <button className="btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+
+        {/* Explicit type="button" + simple handler */}
+        <button type="button" className="btn" onClick={onSaveClick} disabled={saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
       </div>
       <p className="small">Tip: v1 is grams-only and totals are frozen when you log an entry.</p>
     </main>
