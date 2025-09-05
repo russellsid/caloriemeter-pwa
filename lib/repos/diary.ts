@@ -1,7 +1,5 @@
 // lib/repos/diary.ts
 'use client';
-
-import { getDb, rows } from '../db/sql';
 import { diaryDayLocalFromUtcMs } from '../utils/dayBoundary';
 
 export type DiaryEntry = {
@@ -19,32 +17,56 @@ export type DiaryEntry = {
   created_at_ms: number;
 };
 
-export async function addEntryFromRecipe(profileId: string, recipeId: string, amountWeightG: number, loggedAtUtcMs: number) {
-  const { db, persist } = await getDb();
-  // fetch recipe
-  const r = rows(db.exec(`SELECT * FROM recipe WHERE id = ?`, [recipeId]))[0];
+const RECIPES_KEY = 'cm_recipes_v1';
+const ENTRIES_KEY = 'cm_entries_v1';
+const PROFILES_KEY = 'cm_profiles_v1';
+
+function loadJSON<T>(k: string, def: T): T {
+  try { const s = localStorage.getItem(k); return s ? JSON.parse(s) as T : def; }
+  catch { return def; }
+}
+function saveJSON<T>(k: string, v: T) {
+  try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+}
+function defaultProfileId(): string {
+  const profiles = loadJSON<{id:string,name:string,created_at_ms:number}[]>(PROFILES_KEY, []);
+  return profiles[0]?.id || 'default';
+}
+
+export async function addEntryFromRecipe(
+  profileId: string, recipeId: string, amountWeightG: number, loggedAtUtcMs: number
+) {
+  const recipes = loadJSON<any[]>(RECIPES_KEY, []);
+  const r = recipes.find(x => x.id === recipeId);
   if (!r) throw new Error('Recipe not found');
 
   const scale = amountWeightG / r.total_weight_g;
-  const calories = Math.round(r.calories * scale);
-  const protein_mg = Math.round(r.protein_mg * scale);
-  const carbs_mg = Math.round(r.carbs_mg * scale);
-  const fat_mg = Math.round(r.fat_mg * scale);
-  const day = diaryDayLocalFromUtcMs(loggedAtUtcMs, 2);
+  const entry: DiaryEntry = {
+    id: (globalThis.crypto && 'randomUUID' in globalThis.crypto) ? (globalThis.crypto as any).randomUUID() : String(Date.now()),
+    profile_id: profileId || defaultProfileId(),
+    logged_at_utc_ms: loggedAtUtcMs,
+    recipe_id: recipeId,
+    label: null,
+    amount_weight_g: amountWeightG,
+    calories: Math.round(r.calories * scale),
+    protein_mg: Math.round(r.protein_mg * scale),
+    carbs_mg: Math.round(r.carbs_mg * scale),
+    fat_mg: Math.round(r.fat_mg * scale),
+    diary_day_local: diaryDayLocalFromUtcMs(loggedAtUtcMs, 2),
+    created_at_ms: Date.now()
+  };
 
-  const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
-  const now = Date.now();
-  db.run(`INSERT INTO diary_entry(id, profile_id, logged_at_utc_ms, recipe_id, label, amount_weight_g, calories, protein_mg, carbs_mg, fat_mg, diary_day_local, created_at_ms)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [id, profileId, loggedAtUtcMs, recipeId, null, amountWeightG, calories, protein_mg, carbs_mg, fat_mg, day, now]);
-  await persist();
-  return id;
+  const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
+  entries.unshift(entry);
+  saveJSON(ENTRIES_KEY, entries);
+  return entry.id;
 }
 
 export async function listByDay(profileId: string, diaryDayLocal: string) {
-  const { db } = await getDb();
-  const res = db.exec(`SELECT * FROM diary_entry WHERE profile_id = ? AND diary_day_local = ? ORDER BY created_at_ms DESC`, [profileId, diaryDayLocal]);
-  return rows(res) as DiaryEntry[];
+  const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
+  return entries
+    .filter(e => e.profile_id === (profileId || defaultProfileId()) && e.diary_day_local === diaryDayLocal)
+    .sort((a,b)=>b.created_at_ms - a.created_at_ms);
 }
 
 export async function sumTotals(entries: DiaryEntry[]) {
