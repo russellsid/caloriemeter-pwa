@@ -1,5 +1,10 @@
-export const metadata = { title: "Calorie Meter", description: "Local-first calorie & macro tracker" };
-import "./globals.css";
+// app/layout.tsx
+export const metadata = {
+  title: 'Calorie Meter',
+  description: 'Local-first calorie & macro tracker',
+};
+
+import './globals.css';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -12,13 +17,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="theme-color" content="#000000" />
       </head>
       <body>
-        <script dangerouslySetInnerHTML={{__html:`
-          if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function(){ navigator.serviceWorker.register('/service-worker.js'); });
-          }`}} />
-        <div style={{maxWidth: 900, margin: '0 auto', padding: 16}}>
-          {children}
-        </div>
+        {/* (Keep SW registration minimal) */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function () {
+                  navigator.serviceWorker.register('/service-worker.js');
+                });
+              }
+            `,
+          }}
+        />
+
+        {/* Top nav appears on every page */}
+        <header className="cm-header">
+          <a className="cm-logo" href="/">Calorie Meter</a>
+          <nav className="cm-nav">
+            <a className="btn" href="/">Home</a>
+            <a className="btn" href="/add">+ Add</a>
+            <a className="btn" href="/recipes">Recipes</a>
+          </nav>
+        </header>
+
+        <main className="cm-container">{children}</main>
       </body>
     </html>
   );
