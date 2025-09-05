@@ -1,0 +1,1 @@
+Upload all files to GitHub at repo root. Import repo on Vercel and deploy. This version fixes the TypeScript build error.

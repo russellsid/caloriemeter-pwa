@@ -1,0 +1,1 @@
+export const dynamic='error'; export default function Offline(){return(<main><h1>Offline</h1><p>You’re offline. Go back when online.</p><a className='btn' href='/'>Home</a></main>);}

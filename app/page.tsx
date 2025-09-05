@@ -1,0 +1,1 @@
+export default function Home(){return(<main><h1>Calorie Meter</h1><p>PWA Starter is live. Next step: add the database layer.</p><a className='btn' href='/offline'>Offline page</a></main>);}
