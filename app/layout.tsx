@@ -17,7 +17,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="theme-color" content="#000000" />
       </head>
       <body>
-        {/* (Keep SW registration minimal) */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -29,17 +28,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             `,
           }}
         />
-
-        {/* Top nav appears on every page */}
         <header className="cm-header">
           <a className="cm-logo" href="/">Calorie Meter</a>
           <nav className="cm-nav">
             <a className="btn" href="/">Home</a>
             <a className="btn" href="/add">+ Add</a>
             <a className="btn" href="/recipes">Recipes</a>
+            <a className="btn" href="/settings">Targets</a>
+            <a className="btn" href="/backup">Backup</a>
           </nav>
         </header>
-
         <main className="cm-container">{children}</main>
       </body>
     </html>
