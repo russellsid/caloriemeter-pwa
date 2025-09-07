@@ -1,34 +1,36 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { createRecipe, getDefaultProfileId } from '../../../lib/repos/recipes';
-import { warmup } from '../../../lib/db/sql';
 
 export default function NewRecipe() {
   const [profileId, setProfileId] = useState<string>('');
+
   const [name, setName] = useState('');
   const [totalWeightG, setTotalWeightG] = useState<number>(1000);
   const [calories, setCalories] = useState<number>(0);
-  const [protein, setProtein] = useState<string>('0.0');
+  const [protein, setProtein] = useState<string>('0.0'); // grams
   const [carbs, setCarbs] = useState<string>('0.0');
   const [fat, setFat] = useState<string>('0.0');
   const [saving, setSaving] = useState(false);
 
+  // NEW: read query params (name, calories, protein_g, carbs_g, fat_g, weight)
   useEffect(() => {
-    (async () => {
-      await warmup(); // wake DB
-      const pid = await getDefaultProfileId();
-      setProfileId(pid || 'default');
-    })();
+    // In Next App Router, window.location is available on client
+    const u = new URL(window.location.href);
+    const qp = u.searchParams;
+
+    const n = qp.get('name');          if (n) setName(n);
+    const w = Number(qp.get('weight')); if (Number.isFinite(w) && w > 0) setTotalWeightG(w);
+    const kc = Number(qp.get('calories')); if (Number.isFinite(kc) && kc >= 0) setCalories(kc);
+    const pg = qp.get('protein_g');    if (pg) setProtein(pg);
+    const cg = qp.get('carbs_g');      if (cg) setCarbs(cg);
+    const fg = qp.get('fat_g');        if (fg) setFat(fg);
   }, []);
 
-  async function onSaveClick() {
-    // 🔔 Prove the button is clickable
-    alert('Saving recipe…');
+  useEffect(() => { (async () => setProfileId(await getDefaultProfileId()))(); }, []);
 
+  async function onSave() {
     try {
-      const pid = profileId || (await getDefaultProfileId()) || 'default';
-
-      // Validate
       if (!name.trim()) throw new Error('Enter a name');
       const weight = Number(totalWeightG);
       const kcal = Number(calories);
@@ -40,23 +42,20 @@ export default function NewRecipe() {
       const fMg = Math.round(Number(fat || '0') * 1000);
 
       setSaving(true);
-
-      // Create (don’t block on background persistence)
-      await createRecipe(pid, {
+      await createRecipe(profileId, {
         name,
         total_weight_g: weight,
         calories: kcal,
         protein_mg: pMg,
         carbs_mg: cMg,
         fat_mg: fMg,
-      } as any);
-
+      });
       setSaving(false);
       alert('Recipe saved!');
       window.location.href = '/recipes';
     } catch (err: any) {
       setSaving(false);
-      alert('Failed to save: ' + (err?.message || String(err)));
+      alert('Failed: ' + (err?.message || String(err)));
     }
   }
 
@@ -65,40 +64,39 @@ export default function NewRecipe() {
       <h1>New Recipe</h1>
       <div className="card">
         <label>Name</label>
-        <input className="input" value={name} onChange={(e)=>setName(e.target.value)} placeholder="Paneer Bowl" />
+        <input className="input" value={name} onChange={(e)=>setName(e.target.value)} />
 
         <label>Total recipe weight (g)</label>
-        <input className="input" inputMode="numeric" type="number"
+        <input className="input" type="number" inputMode="numeric"
                value={totalWeightG} onChange={(e)=>setTotalWeightG(Number(e.target.value || '0'))} />
 
         <label>Calories (kcal)</label>
-        <input className="input" inputMode="numeric" type="number"
+        <input className="input" type="number" inputMode="numeric"
                value={calories} onChange={(e)=>setCalories(Number(e.target.value || '0'))} />
 
         <div className="row">
           <div style={{flex:1}}>
             <label>Protein (g)</label>
-            <input className="input" inputMode="decimal"
-                   value={protein} onChange={(e)=>setProtein(e.target.value)} />
+            <input className="input" inputMode="decimal" value={protein} onChange={(e)=>setProtein(e.target.value)} />
           </div>
           <div style={{flex:1}}>
             <label>Carbs (g)</label>
-            <input className="input" inputMode="decimal"
-                   value={carbs} onChange={(e)=>setCarbs(e.target.value)} />
+            <input className="input" inputMode="decimal" value={carbs} onChange={(e)=>setCarbs(e.target.value)} />
           </div>
           <div style={{flex:1}}>
             <label>Fat (g)</label>
-            <input className="input" inputMode="decimal"
-                   value={fat} onChange={(e)=>setFat(e.target.value)} />
+            <input className="input" inputMode="decimal" value={fat} onChange={(e)=>setFat(e.target.value)} />
           </div>
         </div>
 
-        {/* Explicit type="button" + simple handler */}
-        <button type="button" className="btn" onClick={onSaveClick} disabled={saving}>
-          {saving ? 'Saving…' : 'Save'}
-        </button>
+        <div className="row" style={{gap:8}}>
+          <button className="btn" type="button" onClick={onSave} disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <a className="btn" href="/recipes">Cancel</a>
+        </div>
       </div>
-      <p className="small">Tip: v1 is grams-only and totals are frozen when you log an entry.</p>
+      <p className="small">Tip: values imported from the Food DB are per 100 g by default—adjust before saving if your recipe is a different total weight.</p>
     </main>
   );
 }
