@@ -33,6 +33,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <nav className="cm-nav">
             <a className="btn" href="/">Home</a>
             <a className="btn" href="/add">+ Add</a>
+            {/* NEW: one-click search button that uses the API via /foods */}
+            <a className="btn" href="/foods">Food DB</a>
             <a className="btn" href="/recipes">Recipes</a>
             <a className="btn" href="/settings">Targets</a>
             <a className="btn" href="/backup">Backup</a>
