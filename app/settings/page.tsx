@@ -5,7 +5,7 @@ import { calcCaloriesFromMacros, getTargets, saveTargets } from '../../lib/repos
 export default function SettingsPage() {
   const [p, setP] = useState<string>('0');
   const [c, setC] = useState<string>('0');
-  const [f, setF] = useState<string>('0');  // <-- fixed generic placement
+  const [f, setF] = useState<string>('0');  // <-- fixed
   const kcal = calcCaloriesFromMacros(Number(p || 0), Number(c || 0), Number(f || 0));
 
   useEffect(() => {
