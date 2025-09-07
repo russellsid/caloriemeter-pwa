@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { calcCaloriesFromMacros, getTargets, saveTargets } from '../../lib/repos/settings';
 
 export default function SettingsPage() {
-  // keep it simple: no TypeScript generics needed here
+  // Keep it simple: no TS generics here
   const [p, setP] = useState('0');
   const [c, setC] = useState('0');
   const [f, setF] = useState('0');
@@ -73,12 +73,8 @@ export default function SettingsPage() {
         </p>
 
         <div className="row" style={{ gap: 8 }}>
-          <button className="btn" onClick={onSave}>
-            Save
-          </button>
-          <a className="btn" href="/">
-            Cancel
-          </a>
+          <button className="btn" onClick={onSave}>Save</button>
+          <a className="btn" href="/">Cancel</a>
         </div>
       </div>
     </main>
