@@ -32,19 +32,17 @@ function defaultProfileId(): string {
   const profiles = loadJSON<{id:string,name:string,created_at_ms:number}[]>(PROFILES_KEY, []);
   return profiles[0]?.id || 'default';
 }
-function recipeNameById(recipeId: string | null | undefined): string | null {
+function recipeById(recipeId: string | null | undefined): any | null {
   if (!recipeId) return null;
   const recipes = loadJSON<any[]>(RECIPES_KEY, []);
-  const r = recipes.find(x => x.id === recipeId);
-  return r ? r.name as string : null;
+  return recipes.find(x => x.id === recipeId) || null;
 }
 
 // Create entry from recipe (used by +Add)
 export async function addEntryFromRecipe(
   profileId: string, recipeId: string, amountWeightG: number, loggedAtUtcMs: number
 ) {
-  const recipes = loadJSON<any[]>(RECIPES_KEY, []);
-  const r = recipes.find(x => x.id === recipeId);
+  const r = recipeById(recipeId);
   if (!r) throw new Error('Recipe not found');
 
   const scale = amountWeightG / r.total_weight_g;
@@ -53,13 +51,13 @@ export async function addEntryFromRecipe(
     profile_id: profileId || defaultProfileId(),
     logged_at_utc_ms: loggedAtUtcMs,
     recipe_id: recipeId,
-    label: r.name,                    // <-- store the recipe name
+    label: r.name,                    // store the recipe name
     amount_weight_g: amountWeightG,
     calories: Math.round(r.calories * scale),
     protein_mg: Math.round(r.protein_mg * scale),
     carbs_mg: Math.round(r.carbs_mg * scale),
     fat_mg: Math.round(r.fat_mg * scale),
-    diary_day_local: diaryDayLocalFromUtcMs(loggedAtUtcMs, 2),
+    diary_day_local: diaryDayLocalFromUtcMs(loggedAtUtcMs, 2), // 2 AM boundary
     created_at_ms: Date.now()
   };
 
@@ -69,21 +67,29 @@ export async function addEntryFromRecipe(
   return entry.id;
 }
 
-// List entries for a given day (also backfill missing labels)
+// List entries for a given day (and migrate bad/missing fields)
 export async function listByDay(profileId: string, diaryDayLocal: string) {
   const all = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
 
-  // Backfill labels for any older entries that missed the recipe name
+  // MIGRATION on read:
+  // 1) Backfill missing labels from recipe name
+  // 2) Fix diary_day_local based on logged_at_utc_ms with 2 AM boundary
   let mutated = false;
   for (const e of all) {
+    // Backfill label
     if (!e.label && e.recipe_id) {
-      const nm = recipeNameById(e.recipe_id);
-      if (nm) { e.label = nm; mutated = true; }
+      const r = recipeById(e.recipe_id);
+      if (r?.name) { e.label = r.name; mutated = true; }
+    }
+    // Fix day
+    const expectedDay = diaryDayLocalFromUtcMs(e.logged_at_utc_ms, 2);
+    if (e.diary_day_local !== expectedDay) {
+      e.diary_day_local = expectedDay; mutated = true;
     }
   }
   if (mutated) saveJSON(ENTRIES_KEY, all);
 
-  // Return entries for the requested day/profile
+  // Return entries for requested day/profile
   return all
     .filter(e => e.profile_id === (profileId || defaultProfileId()) && e.diary_day_local === diaryDayLocal)
     .sort((a,b)=>b.created_at_ms - a.created_at_ms);
@@ -105,8 +111,6 @@ export async function deleteEntry(entryId: string) {
 }
 
 // Edit entry grams (recompute frozen totals)
-// - Keeps original time/day (does NOT move across days)
-// - Only for recipe-based entries
 export async function updateEntryWeight(entryId: string, newWeightG: number) {
   if (!Number.isFinite(newWeightG) || newWeightG <= 0) throw new Error('Weight must be a positive number');
 
@@ -117,8 +121,7 @@ export async function updateEntryWeight(entryId: string, newWeightG: number) {
   const entry = entries[idx];
   if (!entry.recipe_id) throw new Error('Only recipe-based entries can be edited');
 
-  const recipes = loadJSON<any[]>(RECIPES_KEY, []);
-  const r = recipes.find(x => x.id === entry.recipe_id);
+  const r = recipeById(entry.recipe_id);
   if (!r) throw new Error('Recipe not found for this entry');
 
   const scale = newWeightG / r.total_weight_g;
