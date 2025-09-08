@@ -1,5 +1,5 @@
 // public/service-worker.js
-const SW_VERSION = 'v5';
+const SW_VERSION = 'v6';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
