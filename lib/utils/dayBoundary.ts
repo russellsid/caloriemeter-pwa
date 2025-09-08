@@ -1,22 +1,23 @@
-// utils/dayBoundary.ts
-export function formatYMD(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const day = String(d.getDate()).padStart(2,'0');
-  return `${y}-${m}-${day}`;
+// lib/utils/dayBoundary.ts
+'use client';
+
+function pad(n: number) { return n < 10 ? '0' + n : String(n); }
+function ymd(d: Date) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// Returns 'YYYY-MM-DD' according to 2 AM boundary in local timezone.
-export function diaryDayLocalFromUtcMs(utcMs: number, boundaryHour = 2): string {
-  const d = new Date(utcMs);
-  // convert to local millis
-  const localMs = d.getTime() + (new Date().getTimezoneOffset() * -60000);
-  const shifted = new Date(localMs - boundaryHour*3600*1000);
-  return formatYMD(shifted);
+/**
+ * Return diary "day" (YYYY-MM-DD) for a given timestamp, using a local
+ * start-of-day boundary (e.g. 2 means day runs 02:00 → next 02:00 local time).
+ *
+ * Logic: shift the time back by boundary hours, then take the local date.
+ */
+export function diaryDayLocalFromUtcMs(utcMs: number, startHourLocal: number) {
+  const shifted = new Date(utcMs - startHourLocal * 60 * 60 * 1000);
+  return ymd(shifted); // local date string
 }
 
-// 'today' according to 2 AM boundary.
-export function todayDiaryDay(boundaryHour = 2): string {
-  const now = Date.now();
-  return diaryDayLocalFromUtcMs(now, boundaryHour);
+/** Convenience: today's diary day using the given local boundary hour. */
+export function todayDiaryDay(startHourLocal: number) {
+  return diaryDayLocalFromUtcMs(Date.now(), startHourLocal);
 }
