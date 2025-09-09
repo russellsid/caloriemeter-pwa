@@ -1,12 +1,18 @@
 {
-  "version": 1,
-  "updated_at": "2025-09-08",
+  "version": 2,
+  "updated_at": "2025-09-09",
   "categories": [
     {
       "id": "fruits",
       "name": "Fruits",
       "file": "/db/fruits.json",
-      "count": 108
+      "count": 2
+    },
+    {
+      "id": "ricegrains",
+      "name": "Grains (cooked)",
+      "file": "/db/ricegrains.json",
+      "count": 2
     }
   ]
 }
