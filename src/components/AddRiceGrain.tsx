@@ -2,13 +2,26 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { loadRiceGrainsPack } from '@/data/foodLoader';
 import { searchFoods } from '@/data/foodSearch';
 import { macrosForServing } from '@/lib/nutrition';
-import type { FoodItem } from '@/types/food';
+import type { FoodItem, Per100g } from '@/types/food';
 import CategoryChips, { CatKey } from '@/components/CategoryChips';
 
-export default function AddRiceGrain() {
+export interface AddPayload {
+  id: string;
+  name: string;
+  grams: number;
+  per_100g: Per100g;
+  totals: Per100g; // scaled macros
+  category: string;
+}
+
+export default function AddRiceGrain({
+  onAdd,
+}: {
+  onAdd: (payload: AddPayload) => void;
+}) {
   const [items, setItems] = useState<FoodItem[]>([]);
   const [q, setQ] = useState('');
-  const [grams, setGrams] = useState(150); // default katori
+  const [grams, setGrams] = useState(150);
   const [sel, setSel] = useState<FoodItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cat, setCat] = useState<CatKey>('All');
@@ -36,12 +49,7 @@ export default function AddRiceGrain() {
         placeholder="Search (e.g., rice, dosa, idli, jeera)…"
         value={q}
         onChange={e => setQ(e.target.value)}
-        style={{
-          width: '100%',
-          padding: 10,
-          border: '1px solid #ccc',
-          borderRadius: 6,
-        }}
+        style={{ width: '100%', padding: 10, border: '1px solid #ccc', borderRadius: 6 }}
       />
       {error && <p style={{ color: 'crimson' }}>{error}</p>}
 
@@ -72,20 +80,12 @@ export default function AddRiceGrain() {
       </ul>
 
       {sel && (
-        <div
-          style={{
-            marginTop: 12,
-            padding: 12,
-            border: '1px solid #ddd',
-            borderRadius: 8,
-          }}
-        >
+        <div style={{ marginTop: 12, padding: 12, border: '1px solid #ddd', borderRadius: 8 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700 }}>{sel.name}</div>
               <div style={{ fontSize: 12, color: '#666' }}>
-                {sel.per_100g.kcal} kcal /100g · P {sel.per_100g.protein_g} · C{' '}
-                {sel.per_100g.carbs_g} · F {sel.per_100g.fat_g}
+                {sel.per_100g.kcal} kcal /100g · P {sel.per_100g.protein_g} · C {sel.per_100g.carbs_g} · F {sel.per_100g.fat_g}
               </div>
             </div>
             <label>
@@ -103,7 +103,19 @@ export default function AddRiceGrain() {
           <MacroRow item={sel} grams={grams} />
 
           <button
-            onClick={() => logFood(sel, grams)}
+            onClick={() => {
+              const totals = macrosForServing(sel, grams);
+              onAdd({
+                id: sel.id,
+                name: sel.name,
+                grams,
+                per_100g: sel.per_100g,
+                totals,
+                category: sel.category,
+              });
+              // UX nicety: reset selection after add
+              setSel(null);
+            }}
             style={{
               marginTop: 10,
               padding: '10px 14px',
@@ -124,15 +136,7 @@ export default function AddRiceGrain() {
 function MacroRow({ item, grams }: { item: FoodItem; grams: number }) {
   const m = macrosForServing(item, grams);
   return (
-    <div
-      style={{
-        marginTop: 8,
-        display: 'grid',
-        gridTemplateColumns: 'repeat(5, 1fr)',
-        gap: 8,
-        fontSize: 14,
-      }}
-    >
+    <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, fontSize: 14 }}>
       <div>
         <b>{m.kcal}</b> kcal
       </div>
@@ -142,15 +146,4 @@ function MacroRow({ item, grams }: { item: FoodItem; grams: number }) {
       <div>Fiber {m.fiber_g} g</div>
     </div>
   );
-}
-
-// TODO: replace with your actual diary save logic
-function logFood(item: FoodItem, grams: number) {
-  const macros = macrosForServing(item, grams);
-  console.info('LOG_FOOD', {
-    id: item.id,
-    name: item.name,
-    grams,
-    macros,
-  });
 }
