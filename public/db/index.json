@@ -6,13 +6,13 @@
       "id": "fruits",
       "name": "Fruits",
       "file": "/db/fruits.json",
-      "count": 2
+      "count": 100
     },
     {
-      "id": "grains",
-      "name": "Grains (cooked)",
-      "file": "/db/grains.json",
-      "count": 2
+      "id": "rice_grains",
+      "name": "Rice & Grains (cooked)",
+      "file": "/db/foods.rice_grains.v1.json",
+      "count": 48
     }
   ]
 }
