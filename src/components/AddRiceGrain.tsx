@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { loadRiceGrainsPack } from '@/data/foodLoader';
 import { searchFoods } from '@/data/foodSearch';
@@ -17,7 +19,7 @@ export interface AddPayload {
 export default function AddRiceGrain({
   onAdd,
 }: {
-  onAdd: (payload: AddPayload) => void;
+  onAdd?: (payload: AddPayload) => void; // optional: will console.log if not provided
 }) {
   const [items, setItems] = useState<FoodItem[]>([]);
   const [q, setQ] = useState('');
@@ -45,12 +47,14 @@ export default function AddRiceGrain({
   return (
     <div style={{ maxWidth: 520 }}>
       <h3>Database · Rice / Grains</h3>
+
       <input
         placeholder="Search (e.g., rice, dosa, idli, jeera)…"
         value={q}
         onChange={e => setQ(e.target.value)}
         style={{ width: '100%', padding: 10, border: '1px solid #ccc', borderRadius: 6 }}
       />
+
       {error && <p style={{ color: 'crimson' }}>{error}</p>}
 
       <CategoryChips value={cat} onChange={setCat} />
@@ -105,16 +109,21 @@ export default function AddRiceGrain({
           <button
             onClick={() => {
               const totals = macrosForServing(sel, grams);
-              onAdd({
+              const payload: AddPayload = {
                 id: sel.id,
                 name: sel.name,
                 grams,
                 per_100g: sel.per_100g,
                 totals,
                 category: sel.category,
-              });
-              // UX nicety: reset selection after add
-              setSel(null);
+              };
+              if (onAdd) {
+                onAdd(payload);
+              } else {
+                // safe default so the app doesn't break during wiring
+                console.info('ADD_DIARY_ENTRY (default log)', payload);
+              }
+              setSel(null); // UX: reset after add
             }}
             style={{
               marginTop: 10,
@@ -137,9 +146,7 @@ function MacroRow({ item, grams }: { item: FoodItem; grams: number }) {
   const m = macrosForServing(item, grams);
   return (
     <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, fontSize: 14 }}>
-      <div>
-        <b>{m.kcal}</b> kcal
-      </div>
+      <div><b>{m.kcal}</b> kcal</div>
       <div>Protein {m.protein_g} g</div>
       <div>Carbs {m.carbs_g} g</div>
       <div>Fat {m.fat_g} g</div>
