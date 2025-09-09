@@ -1,10 +1,10 @@
 {
-  "version": 2,
-  "updated_at": "2025-09-09",
   "categories": [
     {
       "id": "fruits",
       "name": "Fruits",
       "file": "/db/fruits.json",
-      "count": 100
+      "count": 10
     }
+  ]
+}
