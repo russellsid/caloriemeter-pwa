@@ -9,9 +9,9 @@
       "count": 2
     },
     {
-      "id": "ricegrains",
+      "id": "grains",
       "name": "Grains (cooked)",
-      "file": "/db/ricegrains.json",
+      "file": "/db/grains.json",
       "count": 2
     }
   ]
