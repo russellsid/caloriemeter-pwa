@@ -7,12 +7,4 @@
       "name": "Fruits",
       "file": "/db/fruits.json",
       "count": 100
-    },
-    {
-      "id": "rice_grains",
-      "name": "Rice & Grains (cooked)",
-      "file": "/db/foods.rice_grains.v1.json",
-      "count": 48
     }
-  ]
-}
