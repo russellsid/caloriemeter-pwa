@@ -10,22 +10,23 @@ export type DiaryEntry = {
   recipe_id?: string | null;
   label?: string | null;
   amount_weight_g?: number | null;
+
   calories: number;
   protein_mg: number;
   carbs_mg: number;
   fat_mg: number;
-  /** NEW: total dietary fiber (mg) for this entry */
-  fiber_mg: number;
+  fiber_mg: number;        // ← NEW
+
   diary_day_local: string;
   created_at_ms: number;
 };
 
-const RECIPES_KEY = 'cm_recipes_v1';
-const ENTRIES_KEY = 'cm_entries_v1';
+const RECIPES_KEY  = 'cm_recipes_v1';
+const ENTRIES_KEY  = 'cm_entries_v2';  // bump to v2 because we added fiber
 const PROFILES_KEY = 'cm_profiles_v1';
 
 function loadJSON<T>(k: string, def: T): T {
-  try { const s = localStorage.getItem(k); return s ? JSON.parse(s) as T : def; }
+  try { const s = localStorage.getItem(k); return s ? (JSON.parse(s) as T) : def; }
   catch { return def; }
 }
 function saveJSON<T>(k: string, v: T) {
@@ -44,14 +45,7 @@ export async function addEntryFromRecipe(
   const r = recipes.find(x => x.id === recipeId);
   if (!r) throw new Error('Recipe not found');
 
-  const baseW = Number(r.total_weight_g) || 100; // guard
-  const scale = amountWeightG / baseW;
-
-  // NOTE: many older recipes won’t have fiber yet; treat as 0
-  const baseFiberMg =
-    typeof r.fiber_mg === 'number' ? r.fiber_mg :
-    typeof r.fiber_g  === 'number' ? Math.round(r.fiber_g * 1000) : 0;
-
+  const scale = amountWeightG / r.total_weight_g;
   const entry: DiaryEntry = {
     id: (globalThis.crypto && 'randomUUID' in globalThis.crypto) ? (globalThis.crypto as any).randomUUID() : String(Date.now()),
     profile_id: profileId || defaultProfileId(),
@@ -59,11 +53,13 @@ export async function addEntryFromRecipe(
     recipe_id: recipeId,
     label: null,
     amount_weight_g: amountWeightG,
-    calories: Math.round(Number(r.calories) * scale),
-    protein_mg: Math.round(Number(r.protein_mg) * scale),
-    carbs_mg: Math.round(Number(r.carbs_mg) * scale),
-    fat_mg: Math.round(Number(r.fat_mg) * scale),
-    fiber_mg: Math.round(baseFiberMg * scale),
+
+    calories: Math.round(r.calories * scale),
+    protein_mg: Math.round(r.protein_mg * scale),
+    carbs_mg: Math.round(r.carbs_mg * scale),
+    fat_mg: Math.round(r.fat_mg * scale),
+    fiber_mg: Math.round((r.fiber_mg ?? 0) * scale),  // ← NEW
+
     diary_day_local: diaryDayLocalFromUtcMs(loggedAtUtcMs, 2),
     created_at_ms: Date.now()
   };
@@ -82,26 +78,22 @@ export async function listByDay(profileId: string, diaryDayLocal: string) {
     .sort((a,b)=>b.created_at_ms - a.created_at_ms);
 }
 
-// Totals helper (adds fiber_g)
+// Totals helper (now returns fiber too)
 export async function sumTotals(entries: DiaryEntry[]) {
   let c=0,p=0,carb=0,f=0,fib=0;
   for (const e of entries) {
-    c += e.calories|0;
-    p += e.protein_mg|0;
-    carb += e.carbs_mg|0;
-    f += e.fat_mg|0;
-    fib += e.fiber_mg|0;
+    c+=e.calories; p+=e.protein_mg; carb+=e.carbs_mg; f+=e.fat_mg; fib+=e.fiber_mg||0;
   }
   return {
     calories: c,
     protein_g: (p/1000),
-    carbs_g: (carb/1000),
-    fat_g: (f/1000),
-    fiber_g: (fib/1000) // NEW
+    carbs_g:   (carb/1000),
+    fat_g:     (f/1000),
+    fiber_g:   (fib/1000),   // ← NEW
   };
 }
 
-// Delete an entry by id
+// Delete entry
 export async function deleteEntry(entryId: string) {
   const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
   const next = entries.filter(e => e.id !== entryId);
@@ -109,9 +101,7 @@ export async function deleteEntry(entryId: string) {
   return entries.length !== next.length;
 }
 
-// Edit entry grams (recompute frozen totals)
-// - Keeps original logged_at_utc_ms and diary_day_local
-// - Requires entry to be from a recipe
+// Update grams for a recipe-based entry
 export async function updateEntryWeight(entryId: string, newWeightG: number) {
   if (!Number.isFinite(newWeightG) || newWeightG <= 0) throw new Error('Weight must be a positive number');
 
@@ -125,19 +115,13 @@ export async function updateEntryWeight(entryId: string, newWeightG: number) {
   const r = await getRecipeById(entry.recipe_id);
   if (!r) throw new Error('Recipe not found for this entry');
 
-  const baseW = Number(r.total_weight_g) || 100;
-  const scale = newWeightG / baseW;
-
-  const baseFiberMg =
-    typeof r.fiber_mg === 'number' ? r.fiber_mg :
-    typeof r.fiber_g  === 'number' ? Math.round(r.fiber_g * 1000) : 0;
-
+  const scale = newWeightG / r.total_weight_g;
   entry.amount_weight_g = newWeightG;
-  entry.calories   = Math.round(Number(r.calories)   * scale);
-  entry.protein_mg = Math.round(Number(r.protein_mg) * scale);
-  entry.carbs_mg   = Math.round(Number(r.carbs_mg)   * scale);
-  entry.fat_mg     = Math.round(Number(r.fat_mg)     * scale);
-  entry.fiber_mg   = Math.round(baseFiberMg * scale);
+  entry.calories  = Math.round(r.calories   * scale);
+  entry.protein_mg= Math.round(r.protein_mg * scale);
+  entry.carbs_mg  = Math.round(r.carbs_mg   * scale);
+  entry.fat_mg    = Math.round(r.fat_mg     * scale);
+  entry.fiber_mg  = Math.round((r.fiber_mg ?? 0) * scale); // ← NEW
 
   entries[idx] = entry;
   saveJSON(ENTRIES_KEY, entries);
