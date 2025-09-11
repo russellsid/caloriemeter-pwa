@@ -1,52 +1,60 @@
 // lib/repos/settings.ts
 'use client';
 
+/** Targets that power the home screen bars (per day) */
 export type Targets = {
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-  // calories is derived but we keep it so UI can show a fixed target
-  calories?: number;
+  calories?: number;     // kcal (optional; if missing we derive from macros)
+  protein_g: number;     // grams
+  carbs_g: number;       // grams
+  fat_g: number;         // grams
+  fiber_g: number;       // grams  ✅ NEW
 };
+
+/** Wrapper in case you later store more settings */
+export type Settings = { targets: Targets };
 
 const TARGETS_KEY = 'cm_targets_v1';
 
 function loadJSON<T>(k: string, def: T): T {
-  try { const s = localStorage.getItem(k); return s ? (JSON.parse(s) as T) : def; }
-  catch { return def; }
+  try { const s = localStorage.getItem(k); return s ? (JSON.parse(s) as T) : def; } catch { return def; }
 }
 function saveJSON<T>(k: string, v: T) {
   try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
 }
 
-/** kcal = 4*protein + 4*carbs + 9*fat */
-export function calcCaloriesFromMacros(protein_g: number, carbs_g: number, fat_g: number): number {
-  const p = Number(protein_g) || 0;
-  const c = Number(carbs_g) || 0;
-  const f = Number(fat_g) || 0;
-  return Math.round(4 * p + 4 * c + 9 * f);
+/** 4/4/9 rule */
+export function calcCaloriesFromMacros(p_g: number, c_g: number, f_g: number) {
+  const kcal = 4 * (Number(p_g) || 0) + 4 * (Number(c_g) || 0) + 9 * (Number(f_g) || 0);
+  return Math.round(kcal);
 }
 
-export async function getTargets(): Promise<Targets> {
-  const t = loadJSON<Targets | null>(TARGETS_KEY, null);
-  if (!t) {
-    // sensible empty defaults
-    return { protein_g: 0, carbs_g: 0, fat_g: 0, calories: 0 };
-  }
-  // backfill calories if missing
-  if (t.calories == null) {
-    t.calories = calcCaloriesFromMacros(t.protein_g, t.carbs_g, t.fat_g);
-  }
-  return t;
+/** Provide sane defaults if user hasn’t set targets yet */
+const DEFAULTS: Targets = {
+  protein_g: 120,
+  carbs_g: 160,
+  fat_g: 60,
+  fiber_g: 25,         // ✅ default daily fiber
+  calories: 4 * 120 + 4 * 160 + 9 * 60,
+};
+
+/** Read current targets (and backfill calories if missing) */
+export function getTargets(): Targets {
+  const t = loadJSON<Targets>(TARGETS_KEY, DEFAULTS);
+  // derive calories if absent or invalid
+  const kcal = Number.isFinite(t.calories) ? Number(t.calories) : calcCaloriesFromMacros(t.protein_g, t.carbs_g, t.fat_g);
+  return { ...t, calories: kcal };
 }
 
-export async function saveTargets(t: Targets): Promise<Targets> {
-  const out: Targets = {
-    protein_g: Number(t.protein_g) || 0,
-    carbs_g: Number(t.carbs_g) || 0,
-    fat_g: Number(t.fat_g) || 0,
+/** Persist targets (normalises numbers and calories) */
+export function saveTargets(next: Targets) {
+  const clean: Targets = {
+    protein_g: Number(next.protein_g) || 0,
+    carbs_g: Number(next.carbs_g) || 0,
+    fat_g: Number(next.fat_g) || 0,
+    fiber_g: Number(next.fiber_g) || 0,
+    calories: Number.isFinite(next.calories)
+      ? Number(next.calories)
+      : calcCaloriesFromMacros(next.protein_g, next.carbs_g, next.fat_g),
   };
-  out.calories = calcCaloriesFromMacros(out.protein_g, out.carbs_g, out.fat_g);
-  saveJSON(TARGETS_KEY, out);
-  return out;
+  saveJSON(TARGETS_KEY, clean);
 }
