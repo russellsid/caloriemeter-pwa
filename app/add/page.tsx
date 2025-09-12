@@ -1,63 +1,90 @@
-"use client";
+// app/add/page.tsx
+'use client';
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { addEntry } from "lib/repos/diary";
-import recipesData from "data/recipes.json";
-import { Recipe } from "types";
-
-const recipeList: Recipe[] = Array.isArray(recipesData) ? recipesData : recipesData.recipes;
+import { useEffect, useState } from 'react';
+import { getDefaultProfileId, listRecipes, searchRecipes, getRecipeById, type Recipe } from '../../lib/repos/recipes';
+import { addEntryFromRecipe } from '../../lib/repos/diary';
 
 export default function AddPage() {
-  const [recipeId, setRecipeId] = useState<string>(recipeList.length > 0 ? recipeList[0].id : "");
-  const [weight, setWeight] = useState<string>("");
-  const router = useRouter();
+  const [profileId, setProfileId] = useState<string>('');
+  const [query, setQuery] = useState('');
+  const [items, setItems] = useState<Recipe[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const selectedRecipe = recipeList.find(r => r.id === recipeId);
-    if (selectedRecipe) {
-      // Add diary entry for the selected recipe and weight
-      addEntry(selectedRecipe, Number(weight));
+  useEffect(() => {
+    (async () => {
+      const pid = await getDefaultProfileId();
+      setProfileId(pid);
+      const r = await listRecipes(pid);
+      setItems(r);
+      setLoading(false);
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      if (!query.trim()) { setItems(await listRecipes(profileId)); return; }
+      setItems(await searchRecipes(query));
+    })();
+  }, [query, profileId]);
+
+  async function onAdd(recipeId: string) {
+    try {
+      const r = await getRecipeById(recipeId);
+      const defaultGrams = r?.total_weight_g && r.total_weight_g > 0 ? r.total_weight_g : 100;
+
+      const gramsStr = prompt(`How many grams?`, String(defaultGrams));
+      if (!gramsStr) return;
+      const grams = parseInt(gramsStr, 10);
+      if (!Number.isFinite(grams) || grams <= 0) { alert('Enter a positive number in grams'); return; }
+
+      await addEntryFromRecipe(profileId, recipeId, grams, Date.now());
+      alert('Added to today!');
+      window.location.href = '/';
+    } catch (e: any) {
+      alert(e?.message || String(e));
     }
-    // Navigate back to home page after adding
-    router.push("/");
-  };
+  }
 
   return (
     <main>
-      <h2>Add Diary Entry</h2>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label htmlFor="recipe">Recipe:</label>
-          <select 
-            id="recipe" 
-            value={recipeId} 
-            onChange={(e) => setRecipeId(e.target.value)} 
-            required
-          >
-            <option value="" disabled>-- Select Recipe --</option>
-            {recipeList.map(recipe => (
-              <option key={recipe.id} value={recipe.id}>
-                {recipe.name}
-              </option>
-            ))}
-          </select>
+      <div className="header" style={{ marginBottom: 12 }}>
+        <h1>Add to Today</h1>
+        <div className="row">
+          <a className="btn" href="/recipes">Recipes</a>
+          <a className="btn" href="/">Home</a>
         </div>
-        <div>
-          <label htmlFor="weight">Weight (g):</label>
-          <input 
-            id="weight" 
-            type="number" 
-            step="1" 
-            value={weight} 
-            onChange={(e) => setWeight(e.target.value)} 
-            placeholder="grams" 
-            required 
-          />
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <input
+          className="input"
+          placeholder="Search your recipes…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+
+      {loading ? (
+        <p>Loading…</p>
+      ) : (
+        <div className="grid">
+          {items.map((r) => (
+            <div className="card" key={r.id}>
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <div>
+                  <div><b>{r.name}</b></div>
+                  <div className="small">{r.total_weight_g} g · {r.calories} kcal</div>
+                  <div className="small">
+                    P {r.protein_g.toFixed(1)}g · C {r.carbs_g.toFixed(1)}g · F {r.fat_g.toFixed(1)}g · Fib {r.fiber_g.toFixed(1)}g
+                  </div>
+                </div>
+                <button className="btn" type="button" onClick={() => onAdd(r.id)}>Add</button>
+              </div>
+            </div>
+          ))}
         </div>
-        <button type="submit">Add to Diary</button>
-      </form>
+      )}
     </main>
   );
 }
