@@ -1,82 +1,50 @@
-'use client';
-import { useEffect, useState } from 'react';
-import { calcCaloriesFromMacros, getTargets, saveTargets } from '../../lib/repos/settings';
+import { getTargets, updateTargets } from "lib/repos/settings";
+
+export async function updateTargetsAction(formData: FormData) {
+  "use server";
+  const kcal = Number(formData.get("kcal")) || 0;
+  const protein = parseFloat(formData.get("protein")?.toString() || "0") || 0;
+  const carbs = parseFloat(formData.get("carbs")?.toString() || "0") || 0;
+  const fat = parseFloat(formData.get("fat")?.toString() || "0") || 0;
+  const fiber = parseFloat(formData.get("fiber")?.toString() || "0") || 0;
+  const newTargets = {
+    kcal,
+    protein_g: protein,
+    carbs_g: carbs,
+    fat_g: fat,
+    fiber_g: fiber
+  };
+  updateTargets(newTargets);
+}
 
 export default function SettingsPage() {
-  // Keep it simple: no TS generics here
-  const [p, setP] = useState('0');
-  const [c, setC] = useState('0');
-  const [f, setF] = useState('0');
-  const kcal = calcCaloriesFromMacros(Number(p || 0), Number(c || 0), Number(f || 0));
-
-  useEffect(() => {
-    (async () => {
-      const t = await getTargets();
-      setP(String(t.protein_g));
-      setC(String(t.carbs_g));
-      setF(String(t.fat_g));
-    })();
-  }, []);
-
-  async function onSave() {
-    const pNum = Number(p || 0);
-    const cNum = Number(c || 0);
-    const fNum = Number(f || 0);
-    if (pNum < 0 || cNum < 0 || fNum < 0) {
-      alert('Targets must be ≥ 0');
-      return;
-    }
-    await saveTargets(pNum, cNum, fNum);
-    alert('Targets saved!');
-    window.location.href = '/';
-  }
-
+  const targets = getTargets();
   return (
     <main>
-      <h1>Daily Targets</h1>
-      <div className="card">
-        <div className="row">
-          <div style={{ flex: 1 }}>
-            <label>Protein (g)</label>
-            <input
-              className="input"
-              inputMode="numeric"
-              type="number"
-              value={p}
-              onChange={(e) => setP(e.target.value)}
-            />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label>Carbs (g)</label>
-            <input
-              className="input"
-              inputMode="numeric"
-              type="number"
-              value={c}
-              onChange={(e) => setC(e.target.value)}
-            />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label>Fat (g)</label>
-            <input
-              className="input"
-              inputMode="numeric"
-              type="number"
-              value={f}
-              onChange={(e) => setF(e.target.value)}
-            />
-          </div>
+      <h2>Targets</h2>
+      <form action={updateTargetsAction}>
+        <div>
+          <label htmlFor="kcal">Calories:</label>
+          <input id="kcal" name="kcal" type="number" defaultValue={targets.kcal} />
         </div>
-
-        <p className="small">
-          Calories auto-calculated: <b>{kcal}</b> kcal (P×4 + C×4 + F×9)
-        </p>
-
-        <div className="row" style={{ gap: 8 }}>
-          <button className="btn" onClick={onSave}>Save</button>
-          <a className="btn" href="/">Cancel</a>
+        <div>
+          <label htmlFor="protein">Protein (g):</label>
+          <input id="protein" name="protein" type="number" step="0.1" defaultValue={targets.protein_g.toFixed(1)} />
         </div>
-      </div>
+        <div>
+          <label htmlFor="carbs">Carbs (g):</label>
+          <input id="carbs" name="carbs" type="number" step="0.1" defaultValue={targets.carbs_g.toFixed(1)} />
+        </div>
+        <div>
+          <label htmlFor="fat">Fat (g):</label>
+          <input id="fat" name="fat" type="number" step="0.1" defaultValue={targets.fat_g.toFixed(1)} />
+        </div>
+        <div>
+          <label htmlFor="fiber">Fiber (g):</label>
+          <input id="fiber" name="fiber" type="number" step="0.1" defaultValue={targets.fiber_g.toFixed(1)} />
+        </div>
+        <button type="submit">Save Targets</button>
+      </form>
     </main>
   );
 }
