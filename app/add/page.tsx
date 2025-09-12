@@ -2,7 +2,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getDefaultProfileId, listRecipes, searchRecipes, getRecipeById, type Recipe } from '../../lib/repos/recipes';
+import {
+  getDefaultProfileId,
+  listRecipes,
+  searchRecipes,
+  getRecipeById,
+  type Recipe,
+} from '../../lib/repos/recipes';
 import { addEntryFromRecipe } from '../../lib/repos/diary';
 
 export default function AddPage() {
@@ -24,25 +30,32 @@ export default function AddPage() {
   useEffect(() => {
     (async () => {
       if (!profileId) return;
-      if (!query.trim()) { setItems(await listRecipes(profileId)); return; }
+      if (!query.trim()) {
+        setItems(await listRecipes(profileId));
+        return;
+      }
       setItems(await searchRecipes(profileId, query));
     })();
   }, [query, profileId]);
 
   async function onAdd(recipeId: string) {
     try {
-      // Fetch the recipe so we can use its own total weight as the default
+      // default to the recipe's total weight if present
       const r = await getRecipeById(recipeId);
-      const defaultGrams = r?.total_weight_g && r.total_weight_g > 0 ? r.total_weight_g : 100;
+      const defaultGrams =
+        r?.total_weight_g && r.total_weight_g > 0 ? r.total_weight_g : 100;
 
       const gramsStr = prompt(`How many grams?`, String(defaultGrams));
       if (!gramsStr) return;
       const grams = parseInt(gramsStr, 10);
-      if (!Number.isFinite(grams) || grams <= 0) { alert('Enter a positive number in grams'); return; }
+      if (!Number.isFinite(grams) || grams <= 0) {
+        alert('Enter a positive number in grams');
+        return;
+      }
 
       await addEntryFromRecipe(profileId, recipeId, grams, Date.now());
       alert('Added to today!');
-      window.location.href = '/'; // back to Home
+      window.location.href = '/';
     } catch (e: any) {
       alert(e?.message || String(e));
     }
@@ -77,7 +90,10 @@ export default function AddPage() {
                 <div>
                   <div><b>{r.name}</b></div>
                   <div className="small">{r.total_weight_g} g · {r.calories} kcal</div>
-                  <div className="small">P {(r.protein_mg/1000).toFixed(1)}g · C {(r.carbs_mg/1000).toFixed(1)}g · F {(r.fat_mg/1000).toFixed(1)}g</div>
+                  {/* UPDATED: show grams fields, no /1000 */}
+                  <div className="small">
+                    P {r.protein_g.toFixed(1)}g · C {r.carbs_g.toFixed(1)}g · F {r.fat_g.toFixed(1)}g
+                  </div>
                 </div>
                 <button className="btn" type="button" onClick={() => onAdd(r.id)}>Add</button>
               </div>
