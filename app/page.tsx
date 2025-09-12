@@ -1,3 +1,4 @@
+// app/page.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -86,10 +87,13 @@ export default function Home() {
     carbs_g: number;
     fat_g: number;
   }>({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+
+  // IMPORTANT: include fiber_g so it conforms to Targets
   const [targets, setTargets] = useState<Targets>({
     protein_g: 0,
     carbs_g: 0,
     fat_g: 0,
+    fiber_g: 0, // ✅ added
     calories: 0,
   });
 
