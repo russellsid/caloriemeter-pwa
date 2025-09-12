@@ -5,136 +5,108 @@ export type Recipe = {
   id: string;
   profile_id: string;
   name: string;
-  total_weight_g: number; // grams for whole recipe
-  calories: number;       // kcal for whole recipe
-
-  /** Canonical macros in grams (preferred going forward) */
-  protein_g?: number;
-  carbs_g?: number;
-  fat_g?: number;
-
-  /** Back-compat fields in mg (many pages still read these) */
-  protein_mg?: number;
-  carbs_mg?: number;
-  fat_mg?: number;
-
-  /** Optional fiber (grams); back-compat mg will be computed if needed */
-  fiber_g?: number;
-  fiber_mg?: number;
-
+  total_weight_g: number;
+  calories: number;     // kcal for the whole recipe weight
+  protein_g: number;    // grams for the whole recipe weight
+  carbs_g: number;      // grams for the whole recipe weight
+  fat_g: number;        // grams for the whole recipe weight
   created_at_ms: number;
 };
 
-const RECIPES_KEY  = 'cm_recipes_v1';
+const RECIPES_KEY = 'cm_recipes_v1';
 const PROFILES_KEY = 'cm_profiles_v1';
 
+// ---------- helpers ----------
 function loadJSON<T>(k: string, def: T): T {
-  try { const s = localStorage.getItem(k); return s ? (JSON.parse(s) as T) : def; }
-  catch { return def; }
+  try { const s = localStorage.getItem(k); return s ? (JSON.parse(s) as T) : def; } catch { return def; }
 }
 function saveJSON<T>(k: string, v: T) {
   try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
 }
-
+function uid() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
 function defaultProfileId(): string {
   const profiles = loadJSON<{ id: string; name: string; created_at_ms: number }[]>(PROFILES_KEY, []);
   return profiles[0]?.id || 'default';
 }
-export function getDefaultProfileId(): string { return defaultProfileId(); }
 
-/** Normalize a recipe object to include BOTH grams and mg fields (computed). */
-function normalizeRecipe(r: any): Recipe {
-  const protein_g = Number.isFinite(r?.protein_g) ? Number(r.protein_g)
-                    : Number.isFinite(r?.protein_mg) ? Number(r.protein_mg) / 1000 : 0;
-  const carbs_g   = Number.isFinite(r?.carbs_g)   ? Number(r.carbs_g)
-                    : Number.isFinite(r?.carbs_mg)   ? Number(r.carbs_mg)   / 1000 : 0;
-  const fat_g     = Number.isFinite(r?.fat_g)     ? Number(r.fat_g)
-                    : Number.isFinite(r?.fat_mg)     ? Number(r.fat_mg)     / 1000 : 0;
-  const fiber_g   = Number.isFinite(r?.fiber_g)   ? Number(r.fiber_g)
-                    : Number.isFinite(r?.fiber_mg)   ? Number(r.fiber_mg)   / 1000 : 0;
-
-  const out: Recipe = {
-    id: String(r.id),
-    profile_id: String(r.profile_id || defaultProfileId()),
-    name: String(r.name || ''),
-    total_weight_g: Number(r.total_weight_g) || 100,
-    calories: Math.round(Number(r.calories) || 0),
-    protein_g, carbs_g, fat_g, fiber_g,
-    protein_mg: Math.round(protein_g * 1000),
-    carbs_mg:   Math.round(carbs_g   * 1000),
-    fat_mg:     Math.round(fat_g     * 1000),
-    fiber_mg:   Math.round(fiber_g   * 1000),
-    created_at_ms: Number(r.created_at_ms) || Date.now(),
-  };
-  return out;
+// ---------- reads ----------
+export function getDefaultProfileId() {
+  return defaultProfileId();
 }
 
-/** Return all recipes for a profile, newest first (normalized with g + mg) */
 export async function listRecipes(profileId?: string): Promise<Recipe[]> {
-  const all = loadJSON<any[]>(RECIPES_KEY, []);
+  const all = loadJSON<Recipe[]>(RECIPES_KEY, []);
   const pid = profileId || defaultProfileId();
   return all
-    .filter(r => (r.profile_id || defaultProfileId()) === pid)
-    .map(normalizeRecipe)
+    .filter(r => r.profile_id === pid)
     .sort((a, b) => b.created_at_ms - a.created_at_ms);
 }
 
-/**
- * Search by name.
- * Supports: searchRecipes("apple")  OR  searchRecipes(profileId, "apple")
- */
-export async function searchRecipes(...args: any[]): Promise<Recipe[]> {
-  const all = loadJSON<any[]>(RECIPES_KEY, []);
-
-  let pid = defaultProfileId();
-  let q = '';
-  if (args.length === 1) q = String(args[0] ?? '');
-  else { pid = String(args[0] ?? pid); q = String(args[1] ?? ''); }
-
-  const base = all.filter(r => (r.profile_id || defaultProfileId()) === pid).map(normalizeRecipe);
-  const s = q.trim().toLowerCase();
-  if (!s) return base;
-  return base.filter(r => r.name?.toLowerCase().includes(s));
+/** case-insensitive contains() on name within a profile */
+export async function searchRecipes(profileId: string, q: string): Promise<Recipe[]> {
+  const all = loadJSON<Recipe[]>(RECIPES_KEY, []);
+  const s = (q || '').trim().toLowerCase();
+  if (!s) return all.filter(r => r.profile_id === profileId);
+  return all.filter(r => r.profile_id === profileId && (r.name || '').toLowerCase().includes(s));
 }
 
-/** Find one (normalized) */
 export async function getRecipeById(id: string): Promise<Recipe | null> {
-  const all = loadJSON<any[]>(RECIPES_KEY, []);
-  const raw = all.find(r => String(r.id) === String(id));
-  return raw ? normalizeRecipe(raw) : null;
+  const all = loadJSON<Recipe[]>(RECIPES_KEY, []);
+  return all.find(r => r.id === id) || null;
 }
 
-/** Optional helper if you create/update recipes elsewhere (accepts g or mg). */
-export async function upsertRecipe(input: Partial<Recipe> & { id: string }): Promise<void> {
-  const all = loadJSON<any[]>(RECIPES_KEY, []);
-  const idx = all.findIndex(r => String(r.id) === String(input.id));
+// ---------- writes ----------
+export async function createRecipe(
+  profileId: string,
+  data: {
+    name: string;
+    total_weight_g: number;
+    calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
+  }
+): Promise<Recipe> {
+  const all = loadJSON<Recipe[]>(RECIPES_KEY, []);
+  const rec: Recipe = {
+    id: uid(),
+    profile_id: profileId,
+    name: data.name ?? '',
+    total_weight_g: Number(data.total_weight_g) || 0,
+    calories: Number(data.calories) || 0,
+    protein_g: Number(data.protein_g) || 0,
+    carbs_g: Number(data.carbs_g) || 0,
+    fat_g: Number(data.fat_g) || 0,
+    created_at_ms: Date.now(),
+  };
+  all.push(rec);
+  saveJSON(RECIPES_KEY, all);
+  return rec;
+}
 
-  // Canonicalize to grams first, then store (also include mg for back-compat)
-  const normalized = normalizeRecipe({
-    ...all[idx],
-    ...input,
-    // If caller supplied only g, mg will be recomputed by normalizeRecipe and saved.
-    // If caller supplied only mg, g will be derived.
-  });
+export async function updateRecipe(
+  id: string,
+  patch: Partial<Omit<Recipe, 'id' | 'profile_id' | 'created_at_ms'>>
+): Promise<Recipe> {
+  const all = loadJSON<Recipe[]>(RECIPES_KEY, []);
+  const i = all.findIndex(r => r.id === id);
+  if (i < 0) throw new Error('Recipe not found');
 
-  // Store both g and mg fields so old UI keeps working
-  const toStore = {
-    id: normalized.id,
-    profile_id: normalized.profile_id,
-    name: normalized.name,
-    total_weight_g: normalized.total_weight_g,
-    calories: normalized.calories,
-    protein_g: normalized.protein_g,
-    carbs_g: normalized.carbs_g,
-    fat_g: normalized.fat_g,
-    fiber_g: normalized.fiber_g,
-    protein_mg: normalized.protein_mg,
-    carbs_mg: normalized.carbs_mg,
-    fat_mg: normalized.fat_mg,
-    fiber_mg: normalized.fiber_mg,
-    created_at_ms: normalized.created_at_ms,
+  const current = all[i];
+  const next: Recipe = {
+    ...current,
+    ...patch,
+    // coerce numeric fields if they are provided in patch
+    total_weight_g: patch.total_weight_g !== undefined ? Number(patch.total_weight_g) : current.total_weight_g,
+    calories:      patch.calories       !== undefined ? Number(patch.calories)       : current.calories,
+    protein_g:     patch.protein_g      !== undefined ? Number(patch.protein_g)      : current.protein_g,
+    carbs_g:       patch.carbs_g        !== undefined ? Number(patch.carbs_g)        : current.carbs_g,
+    fat_g:         patch.fat_g          !== undefined ? Number(patch.fat_g)          : current.fat_g,
   };
 
-  if (idx >= 0) all[idx] = toStore; else all.unshift(toStore);
+  all[i] = next;
   saveJSON(RECIPES_KEY, all);
+  return next;
 }
