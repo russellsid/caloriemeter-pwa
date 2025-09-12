@@ -1,129 +1,82 @@
-// lib/repos/diary.ts
-'use client';
-import { diaryDayLocalFromUtcMs } from '../utils/dayBoundary';
-import { getRecipeById } from './recipes';
+import { DiaryEntry, Recipe } from "types";
 
-export type DiaryEntry = {
-  id: string;
-  profile_id: string;
-  logged_at_utc_ms: number;
-  recipe_id?: string | null;
-  label?: string | null;
-  amount_weight_g?: number | null;
+// In-memory list of diary entries
+let entries: DiaryEntry[] = [];
 
-  calories: number;
-  protein_mg: number;
-  carbs_mg: number;
-  fat_mg: number;
-  fiber_mg: number;        // ← NEW
-
-  diary_day_local: string;
-  created_at_ms: number;
-};
-
-const RECIPES_KEY  = 'cm_recipes_v1';
-const ENTRIES_KEY  = 'cm_entries_v2';  // bump to v2 because we added fiber
-const PROFILES_KEY = 'cm_profiles_v1';
-
-function loadJSON<T>(k: string, def: T): T {
-  try { const s = localStorage.getItem(k); return s ? (JSON.parse(s) as T) : def; }
-  catch { return def; }
-}
-function saveJSON<T>(k: string, v: T) {
-  try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
-}
-function defaultProfileId(): string {
-  const profiles = loadJSON<{id:string,name:string,created_at_ms:number}[]>(PROFILES_KEY, []);
-  return profiles[0]?.id || 'default';
+/** Get all diary entries for the current day. */
+export function getEntries(): DiaryEntry[] {
+  const todayStr = new Date().toISOString().split("T")[0];
+  return entries.filter(entry => entry.date === todayStr);
 }
 
-// Create entry from recipe (used by +Add)
-export async function addEntryFromRecipe(
-  profileId: string, recipeId: string, amountWeightG: number, loggedAtUtcMs: number
-) {
-  const recipes = loadJSON<any[]>(RECIPES_KEY, []);
-  const r = recipes.find(x => x.id === recipeId);
-  if (!r) throw new Error('Recipe not found');
-
-  const scale = amountWeightG / r.total_weight_g;
-  const entry: DiaryEntry = {
-    id: (globalThis.crypto && 'randomUUID' in globalThis.crypto) ? (globalThis.crypto as any).randomUUID() : String(Date.now()),
-    profile_id: profileId || defaultProfileId(),
-    logged_at_utc_ms: loggedAtUtcMs,
-    recipe_id: recipeId,
-    label: null,
-    amount_weight_g: amountWeightG,
-
-    calories: Math.round(r.calories * scale),
-    protein_mg: Math.round(r.protein_mg * scale),
-    carbs_mg: Math.round(r.carbs_mg * scale),
-    fat_mg: Math.round(r.fat_mg * scale),
-    fiber_mg: Math.round((r.fiber_mg ?? 0) * scale),  // ← NEW
-
-    diary_day_local: diaryDayLocalFromUtcMs(loggedAtUtcMs, 2),
-    created_at_ms: Date.now()
-  };
-
-  const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
-  entries.unshift(entry);
-  saveJSON(ENTRIES_KEY, entries);
-  return entry.id;
-}
-
-// List entries for a given day
-export async function listByDay(profileId: string, diaryDayLocal: string) {
-  const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
-  return entries
-    .filter(e => e.profile_id === (profileId || defaultProfileId()) && e.diary_day_local === diaryDayLocal)
-    .sort((a,b)=>b.created_at_ms - a.created_at_ms);
-}
-
-// Totals helper (now returns fiber too)
-export async function sumTotals(entries: DiaryEntry[]) {
-  let c=0,p=0,carb=0,f=0,fib=0;
-  for (const e of entries) {
-    c+=e.calories; p+=e.protein_mg; carb+=e.carbs_mg; f+=e.fat_mg; fib+=e.fiber_mg||0;
+/** Add a new diary entry for a given recipe and weight (in grams). */
+export function addEntry(recipe: Recipe, weight: number): DiaryEntry {
+  // Generate unique entry ID
+  let entryId: string;
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    // Use Web Crypto API if available (browser environment)
+    entryId = crypto.randomUUID();
+  } else {
+    // Fallback for Node.js or older environments
+    entryId = "entry_" + Date.now().toString(36);
   }
-  return {
-    calories: c,
-    protein_g: (p/1000),
-    carbs_g:   (carb/1000),
-    fat_g:     (f/1000),
-    fiber_g:   (fib/1000),   // ← NEW
+  const todayStr = new Date().toISOString().split("T")[0];
+  const factor = weight / 100;
+  const entry: DiaryEntry = {
+    id: entryId,
+    recipeId: recipe.id,
+    recipeName: recipe.name,
+    weight: weight,
+    protein_g: parseFloat((recipe.protein_g * factor).toFixed(1)),
+    carbs_g: parseFloat((recipe.carbs_g * factor).toFixed(1)),
+    fat_g: parseFloat((recipe.fat_g * factor).toFixed(1)),
+    fiber_g: parseFloat((recipe.fiber_g * factor).toFixed(1)),
+    kcal: parseFloat((recipe.kcal * factor).toFixed(1)),
+    date: todayStr
   };
+  entries.push(entry);
+  return entry;
 }
 
-// Delete entry
-export async function deleteEntry(entryId: string) {
-  const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
-  const next = entries.filter(e => e.id !== entryId);
-  saveJSON(ENTRIES_KEY, next);
-  return entries.length !== next.length;
+/** Update the weight (in grams) of an existing diary entry (recalculating its nutritional values). */
+export function updateEntryWeight(entryId: string, newWeight: number): DiaryEntry | null {
+  const entry = entries.find(e => e.id === entryId);
+  if (!entry) {
+    return null;
+  }
+  const factor = newWeight / entry.weight;
+  entry.weight = newWeight;
+  // Recalculate macros and calories proportionally to the weight change
+  entry.protein_g = parseFloat((entry.protein_g * factor).toFixed(1));
+  entry.carbs_g = parseFloat((entry.carbs_g * factor).toFixed(1));
+  entry.fat_g = parseFloat((entry.fat_g * factor).toFixed(1));
+  entry.fiber_g = parseFloat((entry.fiber_g * factor).toFixed(1));
+  entry.kcal = parseFloat((entry.kcal * factor).toFixed(1));
+  return entry;
 }
 
-// Update grams for a recipe-based entry
-export async function updateEntryWeight(entryId: string, newWeightG: number) {
-  if (!Number.isFinite(newWeightG) || newWeightG <= 0) throw new Error('Weight must be a positive number');
+/** Remove a diary entry by its ID. */
+export function removeEntry(entryId: string): void {
+  entries = entries.filter(e => e.id !== entryId);
+}
 
-  const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
-  const idx = entries.findIndex(e => e.id === entryId);
-  if (idx === -1) throw new Error('Entry not found');
-
-  const entry = entries[idx];
-  if (!entry.recipe_id) throw new Error('Only recipe-based entries can be edited');
-
-  const r = await getRecipeById(entry.recipe_id);
-  if (!r) throw new Error('Recipe not found for this entry');
-
-  const scale = newWeightG / r.total_weight_g;
-  entry.amount_weight_g = newWeightG;
-  entry.calories  = Math.round(r.calories   * scale);
-  entry.protein_mg= Math.round(r.protein_mg * scale);
-  entry.carbs_mg  = Math.round(r.carbs_mg   * scale);
-  entry.fat_mg    = Math.round(r.fat_mg     * scale);
-  entry.fiber_mg  = Math.round((r.fiber_mg ?? 0) * scale); // ← NEW
-
-  entries[idx] = entry;
-  saveJSON(ENTRIES_KEY, entries);
-  return true;
+/** Sum up the total nutrients consumed for the current day. */
+export function sumTotals(): { protein_g: number; carbs_g: number; fat_g: number; fiber_g: number; kcal: number } {
+  const todayEntries = getEntries();
+  let totalProtein = 0, totalCarbs = 0, totalFat = 0, totalFiber = 0, totalKcal = 0;
+  for (const e of todayEntries) {
+    totalProtein += e.protein_g;
+    totalCarbs += e.carbs_g;
+    totalFat += e.fat_g;
+    totalFiber += e.fiber_g;
+    totalKcal += e.kcal;
+  }
+  // Round totals to one decimal place
+  return {
+    protein_g: parseFloat(totalProtein.toFixed(1)),
+    carbs_g: parseFloat(totalCarbs.toFixed(1)),
+    fat_g: parseFloat(totalFat.toFixed(1)),
+    fiber_g: parseFloat(totalFiber.toFixed(1)),
+    kcal: parseFloat(totalKcal.toFixed(1))
+  };
 }
