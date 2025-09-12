@@ -40,7 +40,7 @@ export default function AddPage() {
 
   async function onAdd(recipeId: string) {
     try {
-      // default to the recipe's total weight if present
+      // Default grams = the recipe's own total weight (fallback 100)
       const r = await getRecipeById(recipeId);
       const defaultGrams =
         r?.total_weight_g && r.total_weight_g > 0 ? r.total_weight_g : 100;
@@ -90,7 +90,6 @@ export default function AddPage() {
                 <div>
                   <div><b>{r.name}</b></div>
                   <div className="small">{r.total_weight_g} g · {r.calories} kcal</div>
-                  {/* UPDATED: show grams fields, no /1000 */}
                   <div className="small">
                     P {r.protein_g.toFixed(1)}g · C {r.carbs_g.toFixed(1)}g · F {r.fat_g.toFixed(1)}g
                   </div>
