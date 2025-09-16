@@ -11,20 +11,22 @@ export default function NewRecipe() {
   const [protein, setProtein] = useState<string>('0.0'); // grams
   const [carbs, setCarbs] = useState<string>('0.0');
   const [fat, setFat] = useState<string>('0.0');
+  const [fiber, setFiber] = useState<string>('0.0');     // NEW: grams
   const [saving, setSaving] = useState(false);
 
-  // NEW: read query params (name, calories, protein_g, carbs_g, fat_g, weight)
+  // Read query params (name, calories, protein_g, carbs_g, fat_g, fiber_g, weight)
   useEffect(() => {
-    // In Next App Router, window.location is available on client
     const u = new URL(window.location.href);
     const qp = u.searchParams;
 
-    const n = qp.get('name');          if (n) setName(n);
-    const w = Number(qp.get('weight')); if (Number.isFinite(w) && w > 0) setTotalWeightG(w);
+    const n = qp.get('name');            if (n) setName(n);
+    const w = Number(qp.get('weight'));  if (Number.isFinite(w) && w > 0) setTotalWeightG(w);
     const kc = Number(qp.get('calories')); if (Number.isFinite(kc) && kc >= 0) setCalories(kc);
-    const pg = qp.get('protein_g');    if (pg) setProtein(pg);
-    const cg = qp.get('carbs_g');      if (cg) setCarbs(cg);
-    const fg = qp.get('fat_g');        if (fg) setFat(fg);
+
+    const pg = qp.get('protein_g'); if (pg) setProtein(pg);
+    const cg = qp.get('carbs_g');   if (cg) setCarbs(cg);
+    const fg = qp.get('fat_g');     if (fg) setFat(fg);
+    const fib = qp.get('fiber_g');  if (fib) setFiber(fib); // NEW
   }, []);
 
   useEffect(() => { (async () => setProfileId(await getDefaultProfileId()))(); }, []);
@@ -40,6 +42,7 @@ export default function NewRecipe() {
       const pMg = Math.round(Number(protein || '0') * 1000);
       const cMg = Math.round(Number(carbs || '0') * 1000);
       const fMg = Math.round(Number(fat || '0') * 1000);
+      const fiberMg = Math.round(Number(fiber || '0') * 1000); // NEW
 
       setSaving(true);
       await createRecipe(profileId, {
@@ -49,6 +52,7 @@ export default function NewRecipe() {
         protein_mg: pMg,
         carbs_mg: cMg,
         fat_mg: fMg,
+        fiber_mg: fiberMg, // NEW
       });
       setSaving(false);
       alert('Recipe saved!');
@@ -86,6 +90,10 @@ export default function NewRecipe() {
           <div style={{flex:1}}>
             <label>Fat (g)</label>
             <input className="input" inputMode="decimal" value={fat} onChange={(e)=>setFat(e.target.value)} />
+          </div>
+          <div style={{flex:1}}>
+            <label>Fiber (g)</label> {/* NEW */}
+            <input className="input" inputMode="decimal" value={fiber} onChange={(e)=>setFiber(e.target.value)} />
           </div>
         </div>
 
