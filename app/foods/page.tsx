@@ -10,6 +10,7 @@ type Food = {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  fiber_g?: number; // NEW: optional fiber in grams
   tags?: string[];
 };
 
@@ -76,7 +77,8 @@ export default function FoodSearchPage() {
       protein_g: String(f.protein_g),
       carbs_g: String(f.carbs_g),
       fat_g: String(f.fat_g),
-      weight: '100'
+      fiber_g: String(f.fiber_g ?? 0), // NEW: pass fiber if present (else 0)
+      weight: '100',
     });
     return `/recipes/new?${params.toString()}`;
   }
@@ -117,6 +119,7 @@ export default function FoodSearchPage() {
                 <div className="small">{f.serving}</div>
                 <div className="small">
                   {Math.round(f.calories)} kcal · P {f.protein_g.toFixed(1)} g · C {f.carbs_g.toFixed(1)} g · F {f.fat_g.toFixed(1)} g
+                  {typeof f.fiber_g === 'number' ? <> · Fiber {f.fiber_g.toFixed(1)} g</> : null /* NEW: show if present */}
                 </div>
               </div>
               <a className="btn" href={toNewRecipeURL(f)}>Use</a>
