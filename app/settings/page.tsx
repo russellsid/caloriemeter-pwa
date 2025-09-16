@@ -1,20 +1,23 @@
+// app/settings/page.tsx
 'use client';
 import { useEffect, useState } from 'react';
 import { calcCaloriesFromMacros, getTargets, saveTargets } from '../../lib/repos/settings';
 
 export default function SettingsPage() {
-  // Keep it simple: no TS generics here
+  // Keep it simple: strings for inputs; convert on save
   const [p, setP] = useState('0');
   const [c, setC] = useState('0');
   const [f, setF] = useState('0');
+  const [fiber, setFiber] = useState('25'); // NEW: Fiber (g), default 25
   const kcal = calcCaloriesFromMacros(Number(p || 0), Number(c || 0), Number(f || 0));
 
   useEffect(() => {
     (async () => {
       const t = await getTargets();
-      setP(String(t.protein_g));
-      setC(String(t.carbs_g));
-      setF(String(t.fat_g));
+      setP(String(t.protein_g ?? 0));
+      setC(String(t.carbs_g ?? 0));
+      setF(String(t.fat_g ?? 0));
+      setFiber(String(t.fiber_g ?? 25)); // NEW
     })();
   }, []);
 
@@ -22,11 +25,13 @@ export default function SettingsPage() {
     const pNum = Number(p || 0);
     const cNum = Number(c || 0);
     const fNum = Number(f || 0);
-    if (pNum < 0 || cNum < 0 || fNum < 0) {
+    const fiberNum = Number(fiber || 0);
+
+    if (pNum < 0 || cNum < 0 || fNum < 0 || fiberNum < 0) {
       alert('Targets must be ≥ 0');
       return;
     }
-    await saveTargets(pNum, cNum, fNum);
+    await saveTargets(pNum, cNum, fNum, fiberNum); // NEW: pass fiber
     alert('Targets saved!');
     window.location.href = '/';
   }
@@ -35,7 +40,7 @@ export default function SettingsPage() {
     <main>
       <h1>Daily Targets</h1>
       <div className="card">
-        <div className="row">
+        <div className="row" style={{ gap: 8 }}>
           <div style={{ flex: 1 }}>
             <label>Protein (g)</label>
             <input
@@ -66,10 +71,20 @@ export default function SettingsPage() {
               onChange={(e) => setF(e.target.value)}
             />
           </div>
+          <div style={{ flex: 1 }}>
+            <label>Fiber (g)</label>
+            <input
+              className="input"
+              inputMode="numeric"
+              type="number"
+              value={fiber}
+              onChange={(e) => setFiber(e.target.value)}
+            />
+          </div>
         </div>
 
         <p className="small">
-          Calories auto-calculated: <b>{kcal}</b> kcal (P×4 + C×4 + F×9)
+          Calories auto-calculated: <b>{kcal}</b> kcal (P×4 + C×4 + F×9). Fiber does not add calories here.
         </p>
 
         <div className="row" style={{ gap: 8 }}>
