@@ -20,13 +20,12 @@ function fmt1(n: number) {
   return (Math.round(n * 10) / 10).toFixed(1);
 }
 
-// Progress row like your screenshot
+// Progress row
 function ProgressRow(props: {
-  label: 'Energy' | 'Protein' | 'Carbs' | 'Fat';
+  label: 'Energy' | 'Protein' | 'Carbs' | 'Fat' | 'Fiber';
   unit: 'kcal' | 'g';
   consumed: number;
   target: number;
-  barColor?: string;
 }) {
   const { label, unit, consumed, target } = props;
   const remaining = Math.max(0, (target || 0) - (consumed || 0));
@@ -36,40 +35,20 @@ function ProgressRow(props: {
     <div style={{ marginBottom: 14 }}>
       <div
         className="row"
-        style={{
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          marginBottom: 4,
-          gap: 8,
-        }}
+        style={{ justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4, gap: 8 }}
       >
         <div style={{ fontWeight: 700 }}>
           {label}{' '}
           <span className="small" style={{ opacity: 0.8 }}>
-            – {unit === 'kcal' ? consumed : fmt1(consumed)} /{' '}
-            {unit === 'kcal' ? target : fmt1(target)} {unit}
+            – {unit === 'kcal' ? consumed : fmt1(consumed)} / {unit === 'kcal' ? target : fmt1(target)} {unit}
           </span>
         </div>
         <div style={{ fontWeight: 700 }}>
           {unit === 'kcal' ? target - consumed : fmt1(remaining)} {unit}
         </div>
       </div>
-
-      <div
-        style={{
-          height: 10,
-          borderRadius: 999,
-          background: '#e8e8e8',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            height: '100%',
-            width: `${frac * 100}%`,
-            background: '#111',
-          }}
-        />
+      <div style={{ height: 10, borderRadius: 999, background: '#e8e8e8', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${frac * 100}%`, background: '#111' }} />
       </div>
     </div>
   );
@@ -85,12 +64,14 @@ export default function Home() {
     protein_g: number;
     carbs_g: number;
     fat_g: number;
-  }>({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+    fiber_g: number; // NEW
+  }>({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 });
+
   const [targets, setTargets] = useState<Targets>({
     protein_g: 0,
     carbs_g: 0,
     fat_g: 0,
-    fiber_g: 0, // NEW: required by Targets
+    fiber_g: 0, // required by Targets
     calories: 0,
   });
 
@@ -118,7 +99,8 @@ export default function Home() {
       targets.calories > 0 ||
       targets.protein_g > 0 ||
       targets.carbs_g > 0 ||
-      targets.fat_g > 0,
+      targets.fat_g > 0 ||
+      targets.fiber_g > 0, // NEW
     [targets]
   );
 
@@ -146,73 +128,35 @@ export default function Home() {
       <div className="header" style={{ marginBottom: 12 }}>
         <h1>Calorie Meter</h1>
         <div className="row">
-          <a className="btn" href="/add">
-            + Add
-          </a>
-          <a className="btn" href="/recipes">
-            Recipes
-          </a>
-          <a className="btn" href="/settings">
-            Targets
-          </a>
+          <a className="btn" href="/add">+ Add</a>
+          <a className="btn" href="/recipes">Recipes</a>
+          <a className="btn" href="/settings">Targets</a>
         </div>
       </div>
 
       <div className="card">
         <h3>Today ({day}) — 2 AM → 2 AM</h3>
+        <p><b>{totals.calories}</b> kcal</p>
         <p>
-          <b>{totals.calories}</b> kcal
-        </p>
-        <p>
-          Protein: <b>{fmt1(totals.protein_g)} g</b> · Carbs{' '}
-          <b>{fmt1(totals.carbs_g)} g</b> · Fat <b>{fmt1(totals.fat_g)} g</b>
+          Protein: <b>{fmt1(totals.protein_g)} g</b> · Carbs <b>{fmt1(totals.carbs_g)} g</b> · Fat <b>{fmt1(totals.fat_g)} g</b>
+          {totals.fiber_g > 0 ? <> · Fiber <b>{fmt1(totals.fiber_g)} g</b></> : null}
         </p>
       </div>
 
       <div className="card">
-        <div
-          className="row"
-          style={{ justifyContent: 'space-between', alignItems: 'center' }}
-        >
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ marginBottom: 0 }}>Targets</h3>
-          <a className="btn" href="/settings">
-            Edit
-          </a>
+          <a className="btn" href="/settings">Edit</a>
         </div>
 
-        {/* Energy */}
-        <ProgressRow
-          label="Energy"
-          unit="kcal"
-          consumed={totals.calories}
-          target={targets.calories}
-        />
-        {/* Protein */}
-        <ProgressRow
-          label="Protein"
-          unit="g"
-          consumed={totals.protein_g}
-          target={targets.protein_g}
-        />
-        {/* Carbs */}
-        <ProgressRow
-          label="Carbs"
-          unit="g"
-          consumed={totals.carbs_g}
-          target={targets.carbs_g}
-        />
-        {/* Fat */}
-        <ProgressRow
-          label="Fat"
-          unit="g"
-          consumed={totals.fat_g}
-          target={targets.fat_g}
-        />
-
+        <ProgressRow label="Energy" unit="kcal" consumed={totals.calories} target={targets.calories} />
+        <ProgressRow label="Protein" unit="g" consumed={totals.protein_g} target={targets.protein_g} />
+        <ProgressRow label="Carbs" unit="g" consumed={totals.carbs_g} target={targets.carbs_g} />
+        <ProgressRow label="Fat" unit="g" consumed={totals.fat_g} target={targets.fat_g} />
+        <ProgressRow label="Fiber" unit="g" consumed={totals.fiber_g} target={targets.fiber_g} /> {/* NEW */}
         {!hasTargets && (
           <p className="small">
-            Set your daily targets in <a href="/settings">Targets</a>. Calories
-            auto-calculate from Protein/Carbs/Fat.
+            Set your daily targets in <a href="/settings">Targets</a>. Calories auto-calculate from Protein/Carbs/Fat.
           </p>
         )}
       </div>
@@ -225,37 +169,18 @@ export default function Home() {
           <div className="grid">
             {entries.map((e) => (
               <div key={e.id} className="card">
-                <div
-                  className="row"
-                  style={{
-                    justifyContent: 'space-between',
-                    alignItems: 'baseline',
-                  }}
-                >
+                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <div>
-                    <div>
-                      <b>{e.label || 'Recipe entry'}</b>
-                    </div>
+                    <div><b>{e.label || 'Recipe entry'}</b></div>
+                    <div className="small">{e.amount_weight_g ?? '-'} g · {e.calories} kcal</div>
                     <div className="small">
-                      {e.amount_weight_g ?? '-'} g · {e.calories} kcal
-                    </div>
-                    <div className="small">
-                      P {(e.protein_mg / 1000).toFixed(1)}g · C{' '}
-                      {(e.carbs_mg / 1000).toFixed(1)}g · F{' '}
-                      {(e.fat_mg / 1000).toFixed(1)}g
+                      P {(e.protein_mg / 1000).toFixed(1)}g · C {(e.carbs_mg / 1000).toFixed(1)}g · F {(e.fat_mg / 1000).toFixed(1)}g
+                      {typeof e.fiber_mg === 'number' ? <> · Fiber {(e.fiber_mg / 1000).toFixed(1)}g</> : null}
                     </div>
                   </div>
                   <div className="row" style={{ gap: 8 }}>
-                    <button className="btn" onClick={() => onEdit(e)} type="button">
-                      Edit
-                    </button>
-                    <button
-                      className="btn"
-                      onClick={() => onDelete(e.id)}
-                      type="button"
-                    >
-                      Delete
-                    </button>
+                    <button className="btn" onClick={() => onEdit(e)} type="button">Edit</button>
+                    <button className="btn" onClick={() => onDelete(e.id)} type="button">Delete</button>
                   </div>
                 </div>
               </div>
