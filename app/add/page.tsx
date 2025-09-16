@@ -23,7 +23,7 @@ export default function AddPage() {
       const r = getRecipeById(rid);
       if (r) {
         setRecipe(r);
-        setGrams(100);
+        setGrams(Math.max(1, r.total_weight_g)); // DEFAULT = recipe's total weight
       }
     }
     setAll(listRecipes());
@@ -38,7 +38,7 @@ export default function AddPage() {
   function selectRecipe(r: Recipe) {
     setRecipeId(r.id);
     setRecipe(r);
-    setGrams(100);
+    setGrams(Math.max(1, r.total_weight_g)); // DEFAULT = recipe's total weight
   }
 
   async function onAdd() {
