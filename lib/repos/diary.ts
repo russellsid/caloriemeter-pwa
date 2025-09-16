@@ -1,138 +1,178 @@
 // lib/repos/diary.ts
 'use client';
-import { diaryDayLocalFromUtcMs } from '../utils/dayBoundary';
+
+/**
+ * Diary repo (LocalStorage).
+ * Conventions:
+ * - Energy in kcal
+ * - Macros stored in milligrams: protein_mg, carbs_mg, fat_mg, fiber_mg (NEW, optional)
+ * - amount_weight_g is the grams of the entry actually consumed
+ * - "day" is a YYYY-MM-DD-like string from your dayBoundary util (2 AM → 2 AM)
+ */
 
 export type DiaryEntry = {
   id: string;
   profile_id: string;
-  logged_at_utc_ms: number;
-  recipe_id?: string | null;
-  label?: string | null;              // recipe name (stored for display)
-  amount_weight_g?: number | null;
-  calories: number;
-  protein_mg: number;
-  carbs_mg: number;
-  fat_mg: number;
-  diary_day_local: string;
+  day: string; // e.g., 2025-09-16 (2AM boundary logic handled by callers)
+  recipe_id?: string;
+  label?: string;
+
+  amount_weight_g?: number; // grams of this entry
+  calories: number;         // kcal for this entry (already scaled for amount_weight_g)
+
+  protein_mg: number;       // mg for this entry (already scaled)
+  carbs_mg: number;         // mg
+  fat_mg: number;           // mg
+  fiber_mg?: number;        // mg (NEW, optional for backward compatibility)
+
   created_at_ms: number;
+  updated_at_ms?: number;
 };
 
-const RECIPES_KEY = 'cm_recipes_v1';
-const ENTRIES_KEY = 'cm_entries_v1';
-const PROFILES_KEY = 'cm_profiles_v1';
+const DIARY_KEY = 'cm_diary_v1';
 
-function loadJSON<T>(k: string, def: T): T {
-  try { const s = localStorage.getItem(k); return s ? JSON.parse(s) as T : def; }
-  catch { return def; }
+// ---------------- storage helpers ----------------
+function loadAll(): DiaryEntry[] {
+  try {
+    const raw = localStorage.getItem(DIARY_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
 }
-function saveJSON<T>(k: string, v: T) {
-  try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+function saveAll(list: DiaryEntry[]) {
+  localStorage.setItem(DIARY_KEY, JSON.stringify(list));
 }
-function defaultProfileId(): string {
-  const profiles = loadJSON<{id:string,name:string,created_at_ms:number}[]>(PROFILES_KEY, []);
-  return profiles[0]?.id || 'default';
-}
-function recipeById(recipeId: string | null | undefined): any | null {
-  if (!recipeId) return null;
-  const recipes = loadJSON<any[]>(RECIPES_KEY, []);
-  return recipes.find(x => x.id === recipeId) || null;
+function byId(id: string): DiaryEntry | undefined {
+  return loadAll().find((e) => e.id === id);
 }
 
-// Create entry from recipe (used by +Add)
-export async function addEntryFromRecipe(
-  profileId: string, recipeId: string, amountWeightG: number, loggedAtUtcMs: number
-) {
-  const r = recipeById(recipeId);
-  if (!r) throw new Error('Recipe not found');
+// ---------------- queries ----------------
+export async function listByDay(profileId: string, day: string): Promise<DiaryEntry[]> {
+  return loadAll().filter((e) => e.profile_id === profileId && e.day === day);
+}
 
-  const scale = amountWeightG / r.total_weight_g;
-  const entry: DiaryEntry = {
-    id: (globalThis.crypto && 'randomUUID' in globalThis.crypto) ? (globalThis.crypto as any).randomUUID() : String(Date.now()),
-    profile_id: profileId || defaultProfileId(),
-    logged_at_utc_ms: loggedAtUtcMs,
-    recipe_id: recipeId,
-    label: r.name,                    // store the recipe name
-    amount_weight_g: amountWeightG,
-    calories: Math.round(r.calories * scale),
-    protein_mg: Math.round(r.protein_mg * scale),
-    carbs_mg: Math.round(r.carbs_mg * scale),
-    fat_mg: Math.round(r.fat_mg * scale),
-    diary_day_local: diaryDayLocalFromUtcMs(loggedAtUtcMs, 2), // 2 AM boundary
-    created_at_ms: Date.now()
+// Sum totals for a set of entries; returns grams for macros (and kcal)
+export async function sumTotals(entries: DiaryEntry[]): Promise<{
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number; // NEW
+}> {
+  let kcal = 0, pMg = 0, cMg = 0, fMg = 0, fibMg = 0;
+  for (const e of entries) {
+    kcal += e.calories || 0;
+    pMg += e.protein_mg || 0;
+    cMg += e.carbs_mg || 0;
+    fMg += e.fat_mg || 0;
+    fibMg += e.fiber_mg || 0; // NEW
+  }
+  return {
+    calories: Math.max(0, Math.round(kcal)),
+    protein_g: round1(pMg / 1000),
+    carbs_g:   round1(cMg / 1000),
+    fat_g:     round1(fMg / 1000),
+    fiber_g:   round1(fibMg / 1000), // NEW
+  };
+}
+
+function round1(n: number) {
+  return Math.round(n * 10) / 10;
+}
+
+// ---------------- mutations ----------------
+export async function deleteEntry(id: string): Promise<boolean> {
+  const list = loadAll();
+  const idx = list.findIndex((e) => e.id === id);
+  if (idx === -1) return false;
+  list.splice(idx, 1);
+  saveAll(list);
+  return true;
+}
+
+export async function updateEntryWeight(id: string, grams: number): Promise<boolean> {
+  const list = loadAll();
+  const idx = list.findIndex((e) => e.id === id);
+  if (idx === -1) return false;
+
+  const cur = list[idx];
+  const factor = Math.max(0, grams) / Math.max(1, cur.amount_weight_g || 1);
+
+  const next: DiaryEntry = {
+    ...cur,
+    amount_weight_g: Math.round(Math.max(1, grams)),
+    calories: Math.round((cur.calories || 0) * factor),
+    protein_mg: Math.round((cur.protein_mg || 0) * factor),
+    carbs_mg: Math.round((cur.carbs_mg || 0) * factor),
+    fat_mg: Math.round((cur.fat_mg || 0) * factor),
+    fiber_mg: Math.round((cur.fiber_mg || 0) * factor), // NEW
+    updated_at_ms: Date.now(),
   };
 
-  const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
-  entries.unshift(entry);
-  saveJSON(ENTRIES_KEY, entries);
-  return entry.id;
-}
-
-// List entries for a given day (and migrate bad/missing fields)
-export async function listByDay(profileId: string, diaryDayLocal: string) {
-  const all = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
-
-  // MIGRATION on read:
-  // 1) Backfill missing labels from recipe name
-  // 2) Fix diary_day_local based on logged_at_utc_ms with 2 AM boundary
-  let mutated = false;
-  for (const e of all) {
-    // Backfill label
-    if (!e.label && e.recipe_id) {
-      const r = recipeById(e.recipe_id);
-      if (r?.name) { e.label = r.name; mutated = true; }
-    }
-    // Fix day
-    const expectedDay = diaryDayLocalFromUtcMs(e.logged_at_utc_ms, 2);
-    if (e.diary_day_local !== expectedDay) {
-      e.diary_day_local = expectedDay; mutated = true;
-    }
-  }
-  if (mutated) saveJSON(ENTRIES_KEY, all);
-
-  // Return entries for requested day/profile
-  return all
-    .filter(e => e.profile_id === (profileId || defaultProfileId()) && e.diary_day_local === diaryDayLocal)
-    .sort((a,b)=>b.created_at_ms - a.created_at_ms);
-}
-
-// Totals helper
-export async function sumTotals(entries: DiaryEntry[]) {
-  let c=0,p=0,carb=0,f=0;
-  for (const e of entries) { c+=e.calories; p+=e.protein_mg; carb+=e.carbs_mg; f+=e.fat_mg; }
-  return { calories:c, protein_g:(p/1000), carbs_g:(carb/1000), fat_g:(f/1000) };
-}
-
-// Delete an entry by id
-export async function deleteEntry(entryId: string) {
-  const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
-  const next = entries.filter(e => e.id !== entryId);
-  saveJSON(ENTRIES_KEY, next);
-  return entries.length !== next.length; // true if something was deleted
-}
-
-// Edit entry grams (recompute frozen totals)
-export async function updateEntryWeight(entryId: string, newWeightG: number) {
-  if (!Number.isFinite(newWeightG) || newWeightG <= 0) throw new Error('Weight must be a positive number');
-
-  const entries = loadJSON<DiaryEntry[]>(ENTRIES_KEY, []);
-  const idx = entries.findIndex(e => e.id === entryId);
-  if (idx === -1) throw new Error('Entry not found');
-
-  const entry = entries[idx];
-  if (!entry.recipe_id) throw new Error('Only recipe-based entries can be edited');
-
-  const r = recipeById(entry.recipe_id);
-  if (!r) throw new Error('Recipe not found for this entry');
-
-  const scale = newWeightG / r.total_weight_g;
-  entry.amount_weight_g = newWeightG;
-  entry.calories = Math.round(r.calories * scale);
-  entry.protein_mg = Math.round(r.protein_mg * scale);
-  entry.carbs_mg = Math.round(r.carbs_mg * scale);
-  entry.fat_mg = Math.round(r.fat_mg * scale);
-  if (!entry.label) entry.label = r.name;   // ensure label exists after edit
-
-  entries[idx] = entry;
-  saveJSON(ENTRIES_KEY, entries);
+  list[idx] = next;
+  saveAll(list);
   return true;
+}
+
+/**
+ * Optional helper that many apps use:
+ * addEntryFromRecipe(profileId, day, recipe, grams)
+ * If your existing code already has this with a different signature, keep that.
+ * This version includes fiber_mg handling (defaults to 0 if missing).
+ */
+export async function addEntryFromRecipe(input: {
+  profile_id: string;
+  day: string;
+  recipe_id?: string;
+  label?: string;
+  grams: number;
+  per100g: {
+    calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
+    fiber_g?: number;
+  };
+}): Promise<DiaryEntry> {
+  const list = loadAll();
+  const now = Date.now();
+
+  // scale per-100g values to the grams being logged
+  const factor = Math.max(0, input.grams) / 100;
+
+  const entry: DiaryEntry = {
+    id: cryptoId(),
+    profile_id: input.profile_id,
+    day: input.day,
+    recipe_id: input.recipe_id,
+    label: input.label,
+
+    amount_weight_g: Math.round(Math.max(1, input.grams)),
+    calories: Math.max(0, Math.round((input.per100g.calories || 0) * factor)),
+
+    protein_mg: Math.max(0, Math.round((input.per100g.protein_g || 0) * 1000 * factor)),
+    carbs_mg:   Math.max(0, Math.round((input.per100g.carbs_g   || 0) * 1000 * factor)),
+    fat_mg:     Math.max(0, Math.round((input.per100g.fat_g     || 0) * 1000 * factor)),
+    fiber_mg:   Math.max(0, Math.round((input.per100g.fiber_g   || 0) * 1000 * factor)), // NEW
+
+    created_at_ms: now,
+    updated_at_ms: now,
+  };
+
+  list.push(entry);
+  saveAll(list);
+  return entry;
+}
+
+function cryptoId(): string {
+  try {
+    const arr = new Uint8Array(16);
+    (self.crypto || (window as any).crypto).getRandomValues(arr);
+    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return Math.random().toString(36).slice(2);
+  }
 }
