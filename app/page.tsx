@@ -90,6 +90,7 @@ export default function Home() {
     protein_g: 0,
     carbs_g: 0,
     fat_g: 0,
+    fiber_g: 0, // NEW: required by Targets
     calories: 0,
   });
 
@@ -163,8 +164,8 @@ export default function Home() {
           <b>{totals.calories}</b> kcal
         </p>
         <p>
-          Protein: <b>{fmt1(totals.protein_g)} g</b> · Carbs:{' '}
-          <b>{fmt1(totals.carbs_g)} g</b> · Fat: <b>{fmt1(totals.fat_g)} g</b>
+          Protein: <b>{fmt1(totals.protein_g)} g</b> · Carbs{' '}
+          <b>{fmt1(totals.carbs_g)} g</b> · Fat <b>{fmt1(totals.fat_g)} g</b>
         </p>
       </div>
 
