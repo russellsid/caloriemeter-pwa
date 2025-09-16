@@ -1,142 +1,149 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 
-type Food = {
-  id: string;
+// ----- Types for DB items -----
+type FoodItem = {
   name: string;
-  serving: string;
-  calories: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-  fiber_g?: number; // NEW: optional fiber in grams
-  tags?: string[];
+  calories: number;     // per 100 g
+  protein_g: number;    // per 100 g
+  carbs_g: number;      // per 100 g
+  fat_g: number;        // per 100 g
+  fiber_g?: number;     // per 100 g (optional)
 };
 
-export default function FoodSearchPage() {
-  const [q, setQ] = useState('');
-  const [items, setItems] = useState<Food[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-  const [source, setSource] = useState<'db-index' | 'single-file' | 'none'>('none');
+type CatalogEntry = {
+  name: string; // e.g., "Fruits", "Cooked Grains & Dishes"
+  file: string; // e.g., "fruits.json", "cooked_grains.json"
+};
 
+// Helper to format grams with 1 decimal consistently
+function fmt1(n: number) {
+  return (Math.round(n * 10) / 10).toFixed(1);
+}
+
+export default function FoodsPage() {
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const [itemsByCategory, setItemsByCategory] = useState<Record<string, FoodItem[]>>({});
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
+
+  // Load the catalog, then load each category file
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      setErr(null);
       try {
-        // 1) Preferred: category index at /db/index.json
-        const idxRes = await fetch('/db/index.json');
-        if (idxRes.ok) {
-          const idx = await idxRes.json();
-          const cat = Array.isArray(idx?.categories)
-            ? idx.categories.find((c: any) => c.id === 'fruits')
-            : null;
-          if (!cat?.file) throw new Error('Fruits category not found in index.json');
-          const listRes = await fetch(cat.file);
-          if (!listRes.ok) throw new Error(`Failed to load ${cat.file} (${listRes.status})`);
-          const list = (await listRes.json()) as Food[];
-          setItems(list);
-          setSource('db-index');
-          return;
-        }
+        setLoading(true);
+        // 1) fetch index.json
+        const idxRes = await fetch('/db/index.json', { cache: 'no-store' });
+        const idx: CatalogEntry[] = await idxRes.json();
+        setCatalog(idx);
 
-        // 2) Fallback: single-file at /foods.json
-        const singleRes = await fetch('/foods.json');
-        if (singleRes.ok) {
-          const list = (await singleRes.json()) as Food[];
-          setItems(list);
-          setSource('single-file');
-          return;
+        // 2) fetch each category file listed in the index
+        const entries: Record<string, FoodItem[]> = {};
+        for (const c of idx) {
+          const res = await fetch(`/db/${c.file}`, { cache: 'no-store' });
+          const arr: FoodItem[] = await res.json();
+          entries[c.name] = Array.isArray(arr) ? arr : [];
         }
-
-        // Neither exists
-        throw new Error('No food database found (missing /db/index.json and /foods.json).');
-      } catch (e: any) {
-        setErr(e?.message || 'Failed to load database');
-        setItems([]);
+        setItemsByCategory(entries);
+      } catch (e) {
+        console.error(e);
+        alert('Failed to load food database.');
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  const results = useMemo(() => {
-    if (!q.trim()) return items;
-    const s = q.trim().toLowerCase();
-    return items.filter(f =>
-      f.name.toLowerCase().includes(s) || (f.id || '').toLowerCase().includes(s)
-    );
-  }, [q, items]);
+  // Search across all categories, but keep grouping headers
+  const filtered = useMemo(() => {
+    const term = (q || '').trim().toLowerCase();
+    if (!term) return itemsByCategory;
 
-  function toNewRecipeURL(f: Food) {
+    const out: Record<string, FoodItem[]> = {};
+    for (const [cat, arr] of Object.entries(itemsByCategory)) {
+      out[cat] = arr.filter((it) => it.name.toLowerCase().includes(term));
+    }
+    return out;
+  }, [q, itemsByCategory]);
+
+  // Build the Use link to prefill /recipes/new
+  function buildUseHref(item: FoodItem) {
+    // We pass per-100g values; the New Recipe page can scale by total weight later.
     const params = new URLSearchParams({
-      name: f.name,
-      calories: String(Math.round(f.calories)),
-      protein_g: String(f.protein_g),
-      carbs_g: String(f.carbs_g),
-      fat_g: String(f.fat_g),
-      fiber_g: String(f.fiber_g ?? 0), // NEW: pass fiber if present (else 0)
-      weight: '100',
+      name: item.name,
+      calories: String(item.calories),
+      protein_g: fmt1(item.protein_g),
+      carbs_g: fmt1(item.carbs_g),
+      fat_g: fmt1(item.fat_g),
     });
+    if (typeof item.fiber_g === 'number') {
+      params.set('fiber_g', fmt1(item.fiber_g));
+    }
     return `/recipes/new?${params.toString()}`;
   }
 
   return (
     <main>
-      <div className="header" style={{ marginBottom: 8 }}>
-        <h1>Food DB {source === 'db-index' ? '— Fruits' : source === 'single-file' ? '' : ''}</h1>
-        <a className="btn" href="/">Home</a>
+      <div className="header" style={{ marginBottom: 12 }}>
+        <h1>Food Database</h1>
+        <div className="row">
+          <a className="btn" href="/">Home</a>
+          <a className="btn" href="/recipes">Recipes</a>
+        </div>
       </div>
 
       <div className="card">
         <input
           className="input"
-          placeholder="Search e.g. apple, mango, banana…"
+          placeholder="Search foods…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
-        {loading && <p className="small">Loading database…</p>}
-        {err && (
-          <p className="small" style={{ color: 'red' }}>
-            {err}
-          </p>
-        )}
-        {!loading && !err && (
-          <p className="small" style={{ opacity: 0.7 }}>
-            Source: {source === 'db-index' ? '/db/index.json' : source === 'single-file' ? '/foods.json' : 'none'}
-          </p>
-        )}
-      </div>
-
-      <div className="grid">
-        {results.map((f) => (
-          <div key={f.id} className="card">
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <div>
-                <div><b>{f.name}</b></div>
-                <div className="small">{f.serving}</div>
-                <div className="small">
-                  {Math.round(f.calories)} kcal · P {f.protein_g.toFixed(1)} g · C {f.carbs_g.toFixed(1)} g · F {f.fat_g.toFixed(1)} g
-                  {typeof f.fiber_g === 'number' ? <> · Fiber {f.fiber_g.toFixed(1)} g</> : null /* NEW: show if present */}
-                </div>
-              </div>
-              <a className="btn" href={toNewRecipeURL(f)}>Use</a>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {!loading && !err && results.length === 0 && (
-        <div className="card"><p className="small">No matches.</p></div>
-      )}
-
-      <div className="card">
-        <p className="small">
-          Values are approximate per <b>100 g</b>. You can edit before saving.
+        <p className="small" style={{ marginTop: 6 }}>
+          Values shown are per <b>100 g</b>. Tap <b>Use</b> to prefill a new recipe.
         </p>
       </div>
+
+      {loading ? (
+        <div className="card"><p className="small">Loading…</p></div>
+      ) : (
+        <>
+          {catalog.map((c) => {
+            const items = filtered[c.name] || [];
+            return (
+              <section key={c.name} style={{ marginBottom: 16 }}>
+                {/* Category header */}
+                <div className="card" style={{ background: '#f6f6f6' }}>
+                  <h3 style={{ margin: 0 }}>{c.name}</h3>
+                </div>
+
+                {/* Cards grid */}
+                <div className="grid">
+                  {items.map((it) => (
+                    <div key={`${c.name}:${it.name}`} className="card">
+                      <div className="row" style={{ justifyContent: 'space-between' }}>
+                        <div>
+                          <div><b>{it.name}</b></div>
+                          <div className="small">
+                            {it.calories} kcal · P {fmt1(it.protein_g)} g · C {fmt1(it.carbs_g)} g · F {fmt1(it.fat_g)} g
+                            {typeof it.fiber_g === 'number' ? <> · Fiber {fmt1(it.fiber_g)} g</> : null}
+                          </div>
+                        </div>
+                        <a className="btn" href={buildUseHref(it)}>Use</a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {items.length === 0 && (
+                  <div className="card"><p className="small">No matches in {c.name}.</p></div>
+                )}
+              </section>
+            );
+          })}
+        </>
+      )}
     </main>
   );
 }
