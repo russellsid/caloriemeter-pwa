@@ -1,52 +1,76 @@
 // lib/repos/settings.ts
-'use client';
-
 export type Targets = {
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-  calories: number; // derived
+  calories?: number;      // kcal (derived if missing)
+  protein_g: number;      // grams
+  carbs_g: number;        // grams
+  fat_g: number;          // grams
+  fiber_g: number;        // grams (NEW)
 };
 
-const TARGETS_KEY = 'cm_targets_v1';
+const LS_KEY = 'cm_targets_v1';
 
-// kcal factors
-const KCAL_P = 4;
-const KCAL_C = 4;
-const KCAL_F = 9;
-
-function loadJSON<T>(k: string, def: T): T {
-  try { const s = localStorage.getItem(k); return s ? JSON.parse(s) as T : def; }
-  catch { return def; }
-}
-function saveJSON<T>(k: string, v: T) {
-  try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+function num(n: unknown, fallback = 0): number {
+  const v = typeof n === 'string' ? Number(n) : (n as number);
+  return Number.isFinite(v) ? v : fallback;
 }
 
-export function calcCaloriesFromMacros(p_g: number, c_g: number, f_g: number) {
-  return Math.round(p_g * KCAL_P + c_g * KCAL_C + f_g * KCAL_F);
+export function calcCaloriesFromMacros(p_g: number, c_g: number, f_g: number): number {
+  const kcal = Math.round(num(p_g) * 4 + num(c_g) * 4 + num(f_g) * 9);
+  return kcal < 0 ? 0 : kcal;
+}
+
+function defaults(): Targets {
+  // Default fiber target = 25 g (as agreed in project notes)
+  return { protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 25, calories: 0 };
 }
 
 export async function getTargets(): Promise<Targets> {
-  const t = loadJSON<Targets>(TARGETS_KEY, {
-    protein_g: 0,
-    carbs_g: 0,
-    fat_g: 0,
-    calories: 0
-  });
-  // ensure calories is consistent
-  const kcal = calcCaloriesFromMacros(t.protein_g, t.carbs_g, t.fat_g);
-  if (kcal !== t.calories) {
-    t.calories = kcal;
-    saveJSON(TARGETS_KEY, t);
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const base = defaults();
+
+    const t: Targets = {
+      protein_g: num(parsed?.protein_g, base.protein_g),
+      carbs_g: num(parsed?.carbs_g, base.carbs_g),
+      fat_g: num(parsed?.fat_g, base.fat_g),
+      fiber_g: num(parsed?.fiber_g, base.fiber_g), // NEW
+      calories: num(parsed?.calories, 0),
+    };
+
+    // Backfill calories if not stored or zero
+    if (!t.calories || t.calories <= 0) {
+      t.calories = calcCaloriesFromMacros(t.protein_g, t.carbs_g, t.fat_g);
+    }
+
+    return t;
+  } catch {
+    return defaults();
   }
-  return t;
 }
 
-// Save grams; calories auto-derived
-export async function saveTargets(p_g: number, c_g: number, f_g: number) {
-  const calories = calcCaloriesFromMacros(p_g, c_g, f_g);
-  const t: Targets = { protein_g: p_g, carbs_g: c_g, fat_g: f_g, calories };
-  saveJSON(TARGETS_KEY, t);
-  return t;
+/**
+ * Save targets (grams) and auto-calc calories.
+ * Backward-compatible:
+ *  - saveTargets(p, c, f)  -> fiber defaults to existing or 25g
+ *  - saveTargets(p, c, f, fiber)
+ */
+export async function saveTargets(
+  protein_g: number,
+  carbs_g: number,
+  fat_g: number,
+  fiber_g?: number
+): Promise<Targets> {
+  const existing = await getTargets();
+  const out: Targets = {
+    protein_g: num(protein_g),
+    carbs_g: num(carbs_g),
+    fat_g: num(fat_g),
+    fiber_g: typeof fiber_g === 'undefined' ? existing.fiber_g : num(fiber_g),
+    calories: 0,
+  };
+  out.calories = calcCaloriesFromMacros(out.protein_g, out.carbs_g, out.fat_g);
+
+  localStorage.setItem(LS_KEY, JSON.stringify(out));
+  return out;
 }
