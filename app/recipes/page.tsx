@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { listRecipes, searchRecipes, Recipe } from '../../lib/repos/recipes';
+import {
+  listRecipes,
+  searchRecipes,
+  deleteRecipe,
+  Recipe,
+} from '../../lib/repos/recipes';
 
 export default function RecipesListPage() {
   const [q, setQ] = useState('');
@@ -16,6 +21,17 @@ export default function RecipesListPage() {
     if (!s) return items;
     return searchRecipes(s);
   }, [q, items]);
+
+  function onDelete(id: string, name: string) {
+    if (!confirm(`Delete recipe "${name}"? This cannot be undone.`)) return;
+    const ok = deleteRecipe(id);
+    if (!ok) {
+      alert('Could not delete (recipe not found).');
+      return;
+    }
+    // Refresh in-memory list
+    setItems(listRecipes());
+  }
 
   return (
     <main>
@@ -51,6 +67,7 @@ export default function RecipesListPage() {
               <div className="row" style={{ gap: 8 }}>
                 <a className="btn" href={`/add?recipe=${r.id}`}>Add</a>
                 <a className="btn" href={`/recipes/${r.id}/edit`}>Edit</a>
+                <button className="btn" type="button" onClick={() => onDelete(r.id, r.name)}>Delete</button>
               </div>
             </div>
           </div>
