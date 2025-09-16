@@ -1,117 +1,143 @@
 // lib/repos/recipes.ts
-'use client';
+const LS_KEY = 'cm_recipes_v1';
 
-// ---- localStorage helpers ----
 export type Recipe = {
   id: string;
   profile_id: string;
   name: string;
   total_weight_g: number;
-  calories: number;
-  protein_mg: number;
-  carbs_mg: number;
-  fat_mg: number;
-  version: number;
+  calories: number;      // kcal (whole recipe)
+  protein_mg: number;    // mg (whole recipe)
+  carbs_mg: number;      // mg (whole recipe)
+  fat_mg: number;        // mg (whole recipe)
+  fiber_mg?: number;     // mg (whole recipe) — NEW optional
   created_at_ms: number;
-  updated_at_ms: number;
+  updated_at_ms?: number;
 };
 
-const RECIPES_KEY = 'cm_recipes_v1';
-const PROFILES_KEY = 'cm_profiles_v1';
-
-function loadJSON<T>(k: string, def: T): T {
-  try { const s = localStorage.getItem(k); return s ? JSON.parse(s) as T : def; }
-  catch { return def; }
+export function defaultProfileId(): string {
+  if (typeof localStorage === 'undefined') return 'default';
+  try {
+    const raw = localStorage.getItem('cm_profiles_v1');
+    if (!raw) return 'default';
+    const obj = JSON.parse(raw);
+    return obj?.default || 'default';
+  } catch {
+    return 'default';
+  }
 }
-function saveJSON<T>(k: string, v: T) {
-  try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
-}
-
-// Ensure a default profile exists
-function ensureDefaultProfile(): string {
-  const profiles = loadJSON<{id:string,name:string,created_at_ms:number}[]>(PROFILES_KEY, []);
-  if (profiles.length) return profiles[0].id;
-  const id = (globalThis.crypto && 'randomUUID' in globalThis.crypto)
-    ? (globalThis.crypto as any).randomUUID()
-    : String(Date.now());
-  profiles.push({ id, name: 'Sid', created_at_ms: Date.now() });
-  saveJSON(PROFILES_KEY, profiles);
-  return id;
-}
-
 export async function getDefaultProfileId(): Promise<string> {
-  return ensureDefaultProfile();
+  return defaultProfileId();
 }
 
-// Create
+function loadAll(): Recipe[] {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as any[];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveAll(list: Recipe[]) {
+  localStorage.setItem(LS_KEY, JSON.stringify(list));
+}
+
+export function listRecipes(profileId?: string): Recipe[] {
+  const pid = profileId || defaultProfileId();
+  return loadAll().filter((r) => r.profile_id === pid);
+}
+
+export function searchRecipes(q: string, profileId?: string): Recipe[] {
+  const s = (q || '').trim().toLowerCase();
+  if (!s) return listRecipes(profileId);
+  return listRecipes(profileId).filter(
+    (r) => r.name.toLowerCase().includes(s) || r.id.includes(s)
+  );
+}
+
+export function getRecipeById(id: string): Recipe | undefined {
+  return loadAll().find((r) => r.id === id);
+}
+
 export async function createRecipe(
   profileId: string,
-  r: Omit<Recipe,'id'|'version'|'created_at_ms'|'updated_at_ms'|'profile_id'>
-) {
-  const id = (globalThis.crypto && 'randomUUID' in globalThis.crypto)
-    ? (globalThis.crypto as any).randomUUID()
-    : String(Date.now());
+  input: {
+    name: string;
+    total_weight_g: number;
+    calories: number;
+    protein_mg: number;
+    carbs_mg: number;
+    fat_mg: number;
+    fiber_mg?: number; // NEW: optional
+  }
+): Promise<Recipe> {
+  const list = loadAll();
   const now = Date.now();
-
-  const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
-  list.push({
-    id,
-    profile_id: profileId || ensureDefaultProfile(),
-    name: r.name,
-    total_weight_g: r.total_weight_g,
-    calories: r.calories,
-    protein_mg: r.protein_mg,
-    carbs_mg: r.carbs_mg,
-    fat_mg: r.fat_mg,
-    version: 1,
+  const rec: Recipe = {
+    id: cryptoRandomId(),
+    profile_id: profileId || defaultProfileId(),
+    name: String(input.name || '').trim(),
+    total_weight_g: Math.max(1, Math.round(input.total_weight_g)),
+    calories: Math.max(0, Math.round(input.calories)),
+    protein_mg: Math.max(0, Math.round(input.protein_mg)),
+    carbs_mg: Math.max(0, Math.round(input.carbs_mg)),
+    fat_mg: Math.max(0, Math.round(input.fat_mg)),
+    fiber_mg: typeof input.fiber_mg === 'number' ? Math.max(0, Math.round(input.fiber_mg)) : undefined,
     created_at_ms: now,
-    updated_at_ms: now
-  });
-  saveJSON(RECIPES_KEY, list);
-  return id;
+    updated_at_ms: now,
+  };
+  list.push(rec);
+  saveAll(list);
+  return rec;
 }
 
-// List / Search
-export async function searchRecipes(profileId: string, prefix: string) {
-  const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
-  const q = prefix.trim().toLowerCase();
-  return list
-    .filter(r => (r.profile_id === (profileId || ensureDefaultProfile())) &&
-                 r.name.toLowerCase().includes(q))
-    .sort((a,b)=>a.name.localeCompare(b.name))
-    .slice(0,50);
-}
-
-export async function listRecipes(profileId: string) {
-  const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
-  return list
-    .filter(r => r.profile_id === (profileId || ensureDefaultProfile()))
-    .sort((a,b)=>b.updated_at_ms - a.updated_at_ms)
-    .slice(0,200);
-}
-
-// Get one
-export async function getRecipeById(recipeId: string): Promise<Recipe | undefined> {
-  const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
-  return list.find(r => r.id === recipeId);
-}
-
-// UPDATE (edit recipe fields; bump updated_at_ms)
 export async function updateRecipe(
-  recipeId: string,
-  updates: Partial<Pick<Recipe, 'name' | 'total_weight_g' | 'calories' | 'protein_mg' | 'carbs_mg' | 'fat_mg'>>
-) {
-  const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
-  const idx = list.findIndex(r => r.id === recipeId);
-  if (idx === -1) throw new Error('Recipe not found');
-
-  const current = list[idx];
+  id: string,
+  patch: Partial<{
+    name: string;
+    total_weight_g: number;
+    calories: number;
+    protein_mg: number;
+    carbs_mg: number;
+    fat_mg: number;
+    fiber_mg?: number; // NEW
+  }>
+): Promise<Recipe | undefined> {
+  const list = loadAll();
+  const idx = list.findIndex((r) => r.id === id);
+  if (idx < 0) return undefined;
+  const cur = list[idx];
   const next: Recipe = {
-    ...current,
-    ...updates,
+    ...cur,
+    ...sanitizePatch(patch),
     updated_at_ms: Date.now(),
   };
   list[idx] = next;
-  saveJSON(RECIPES_KEY, list);
-  return true;
+  saveAll(list);
+  return next;
+}
+
+function sanitizePatch(patch: any) {
+  const out: any = {};
+  if (typeof patch.name === 'string') out.name = patch.name.trim();
+  if (Number.isFinite(patch.total_weight_g)) out.total_weight_g = Math.max(1, Math.round(patch.total_weight_g));
+  if (Number.isFinite(patch.calories)) out.calories = Math.max(0, Math.round(patch.calories));
+  if (Number.isFinite(patch.protein_mg)) out.protein_mg = Math.max(0, Math.round(patch.protein_mg));
+  if (Number.isFinite(patch.carbs_mg)) out.carbs_mg = Math.max(0, Math.round(patch.carbs_mg));
+  if (Number.isFinite(patch.fat_mg)) out.fat_mg = Math.max(0, Math.round(patch.fat_mg));
+  if (Number.isFinite(patch.fiber_mg)) out.fiber_mg = Math.max(0, Math.round(patch.fiber_mg)); // NEW
+  return out;
+}
+
+function cryptoRandomId(): string {
+  try {
+    const arr = new Uint8Array(16);
+    (self.crypto || (window as any).crypto).getRandomValues(arr);
+    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return Math.random().toString(36).slice(2);
+  }
 }
