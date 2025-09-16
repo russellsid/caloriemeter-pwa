@@ -4,7 +4,7 @@
 /**
  * LocalStorage-backed Recipes repo.
  * Conventions:
- * - Macros stored in milligrams: protein_mg, carbs_mg, fat_mg, fiber_mg? (NEW)
+ * - Macros stored in milligrams: protein_mg, carbs_mg, fat_mg, fiber_mg? (NEW optional)
  * - calories for the whole recipe (kcal)
  * - total_weight_g for the whole recipe (g)
  */
@@ -23,7 +23,7 @@ export type Recipe = {
   protein_mg: number;   // mg (whole recipe)
   carbs_mg: number;     // mg (whole recipe)
   fat_mg: number;       // mg (whole recipe)
-  fiber_mg?: number;    // mg (whole recipe) — NEW optional for backward compatibility
+  fiber_mg?: number;    // mg (whole recipe) — optional for backward compatibility
   version: number;      // schema/data version
   created_at_ms: number;
   updated_at_ms: number;
@@ -87,7 +87,7 @@ function cryptoRandomId(): string {
 
 /**
  * Create a recipe.
- * Input matches your previous signature that used Omit<Recipe, ...>.
+ * Input matches Omit<Recipe, ...> to keep callsites simple.
  */
 export async function createRecipe(
   profileId: string,
@@ -105,7 +105,6 @@ export async function createRecipe(
     protein_mg: Math.max(0, Math.round(input.protein_mg)),
     carbs_mg: Math.max(0, Math.round(input.carbs_mg)),
     fat_mg: Math.max(0, Math.round(input.fat_mg)),
-    // NEW — optional; keep undefined if not provided to preserve backwards compatibility
     fiber_mg:
       typeof (input as any).fiber_mg === 'number'
         ? Math.max(0, Math.round((input as any).fiber_mg))
@@ -121,8 +120,7 @@ export async function createRecipe(
 }
 
 /**
- * Update a recipe by id (partial fields).
- * Accepts fiber_mg in the patch too (optional).
+ * Update a recipe by id (partial fields). Accepts fiber_mg in the patch (optional).
  */
 export async function updateRecipe(
   recipeId: string,
@@ -156,7 +154,7 @@ export async function updateRecipe(
       : current.fat_mg,
     fiber_mg: Number.isFinite((updates as any).fiber_mg)
       ? Math.max(0, Math.round((updates as any).fiber_mg))
-      : current.fiber_mg, // NEW
+      : current.fiber_mg,
     updated_at_ms: Date.now(),
   };
 
@@ -165,7 +163,11 @@ export async function updateRecipe(
   return true;
 }
 
-export async function deleteRecipe(recipeId: string): Promise<boolean> {
+/**
+ * Delete a recipe by id.
+ * Note: existing diary entries referencing this id are NOT touched.
+ */
+export function deleteRecipe(recipeId: string): boolean {
   const list = loadJSON<Recipe[]>(RECIPES_KEY, []);
   const idx = list.findIndex((r) => r.id === recipeId);
   if (idx === -1) return false;
