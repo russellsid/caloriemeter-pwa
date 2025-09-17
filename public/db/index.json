@@ -1,4 +1,5 @@
 [
   { "name": "Fruits", "file": "fruits.json" },
-  { "name": "Cooked Grains & Dishes", "file": "cooked_grains.json" }
+  { "name": "Cooked Grains & Dishes", "file": "cooked_grains.json" },
+  { "name": "Proteins (Meat, Eggs, Seafood, Cold Cuts)", "file": "proteins.json" }
 ]
