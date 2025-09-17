@@ -18,8 +18,8 @@
   { "name": "Mutton boti (boneless chunks), grilled", "calories": 260, "protein_g": 27.0, "carbs_g": 0.0, "fat_g": 17.0, "fiber_g": 0.0 },
   { "name": "Mutton seekh kebab", "calories": 270, "protein_g": 21.0, "carbs_g": 5.0, "fat_g": 19.0, "fiber_g": 0.5 },
   { "name": "Mutton shami kebab", "calories": 245, "protein_g": 20.0, "carbs_g": 7.0, "fat_g": 16.0, "fiber_g": 0.5 },
-  { "name": "Mutton keema (dry cooked)", "calories": 250, "protein_g": 23.0, "carbs_g": 3.0, "fat_g": 16.0, "fiber_g": 0.0 },
-  { "name": "Keema ghotala (mutton + egg)", "calories": 270, "protein_g": 24.0, "carbs_g": 3.0, "fat_g": 18.0, "fiber_g": 0.0 },
+  { "name": "Mutton kheema (dry cooked)", "calories": 250, "protein_g": 23.0, "carbs_g": 3.0, "fat_g": 16.0, "fiber_g": 0.0 },
+  { "name": "kheema ghotala (mutton + egg)", "calories": 270, "protein_g": 24.0, "carbs_g": 3.0, "fat_g": 18.0, "fiber_g": 0.0 },
   { "name": "Mutton curry (meat-only, medium oil)", "calories": 260, "protein_g": 25.0, "carbs_g": 2.0, "fat_g": 17.0, "fiber_g": 0.5 },
 
   { "name": "Buffalo tenderloin steak", "calories": 180, "protein_g": 28.0, "carbs_g": 0.0, "fat_g": 7.0, "fiber_g": 0.0 },
