@@ -55,7 +55,7 @@ export default function FoodsPage() {
     })();
   }, []);
 
-  // Search across all categories, but keep grouping headers
+  // Search across all categories
   const filtered = useMemo(() => {
     const term = (q || '').trim().toLowerCase();
     if (!term) return itemsByCategory;
@@ -66,6 +66,8 @@ export default function FoodsPage() {
     }
     return out;
   }, [q, itemsByCategory]);
+
+  const termActive = (q || '').trim().length > 0;
 
   // Build the Use link to prefill /recipes/new
   function buildUseHref(item: FoodItem) {
@@ -111,6 +113,10 @@ export default function FoodsPage() {
         <>
           {catalog.map((c) => {
             const items = filtered[c.name] || [];
+
+            // 🔑 If searching, hide categories with no matches
+            if (termActive && items.length === 0) return null;
+
             return (
               <section key={c.name} style={{ marginBottom: 16 }}>
                 {/* Category header */}
@@ -136,12 +142,20 @@ export default function FoodsPage() {
                   ))}
                 </div>
 
-                {items.length === 0 && (
-                  <div className="card"><p className="small">No matches in {c.name}.</p></div>
+                {/* When not searching, you can show "No matches" for genuinely empty categories if you want.
+                    We hide it during search to avoid empty headers. */}
+                {!termActive && items.length === 0 && (
+                  <div className="card"><p className="small">No items in {c.name}.</p></div>
                 )}
               </section>
             );
           })}
+          {/* If searching and nothing at all matched, show one consolidated message */}
+          {termActive &&
+            Object.values(filtered).reduce((sum, arr) => sum + arr.length, 0) === 0 && (
+              <div className="card"><p className="small">No foods found matching “{q}”.</p></div>
+            )
+          }
         </>
       )}
     </main>
