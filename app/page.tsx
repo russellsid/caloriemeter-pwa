@@ -130,7 +130,7 @@ export default function Home() {
         <div className="row">
           <a className="btn" href="/add">+ Add</a>
           <a className="btn" href="/recipes">Recipes</a>
-          <a className="btn" href="/settings">Targets</a>
+          {/* Targets button removed from header row */}
         </div>
       </div>
 
