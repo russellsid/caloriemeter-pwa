@@ -36,7 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {/* NEW: one-click search button that uses the API via /foods */}
             <a className="btn" href="/foods">Food DB</a>
             <a className="btn" href="/recipes">Recipes</a>
-            <a className="btn" href="/settings">Targets</a>
+            {/* Removed redundant Targets link */}
             <a className="btn" href="/backup">Backup</a>
           </nav>
         </header>
