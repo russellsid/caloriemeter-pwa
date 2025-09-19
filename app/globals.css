@@ -1,12 +1,65 @@
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:#fafafa}
-h1,h2,h3{margin:0 0 12px}
-a.btn,button.btn{background:#111;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;display:inline-block;border:none;cursor:pointer}
-.card{background:#fff;border:1px solid #eee;border-radius:12px;padding:16px;margin:12px 0}
-.input{padding:10px;border:1px solid #ddd;border-radius:8px;width:100%;margin:6px 0 12px}
-.row{display:flex;gap:8px;align-items:center}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-.small{font-size:12px;color:#666}
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  margin: 0;
+  background: #fafafa;
+}
+
+h1, h2, h3 {
+  margin: 0 0 12px;
+}
+
+a.btn, button.btn {
+  background: #111;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  text-decoration: none;
+  display: inline-block;
+  border: none;
+  cursor: pointer;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.input {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  width: 100%;
+  margin: 6px 0 12px;
+  font-size: 16px; /* Prevent iOS Safari zoom on focus */
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.small {
+  font-size: 12px;
+  color: #666;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 .cm-header {
   position: sticky;
   top: 0;
@@ -20,18 +73,26 @@ a.btn,button.btn{background:#111;color:#fff;padding:10px 14px;border-radius:10px
   backdrop-filter: blur(6px);
   border-bottom: 1px solid #eee;
 }
+
 .cm-logo {
   font-weight: 700;
   text-decoration: none;
   color: #111;
   font-size: 20px;
 }
+
 .cm-nav {
   display: flex;
   gap: 8px;
 }
+
 .cm-container {
   max-width: 900px;
   margin: 0 auto;
   padding: 16px;
+}
+
+/* ---- Global safeguard for all input fields ---- */
+input, textarea, select {
+  font-size: 16px; /* Prevent iOS Safari zoom on focus */
 }
