@@ -3,5 +3,6 @@
   { "name": "Cooked Grains & Dishes", "file": "cooked_grains.json" },
   { "name": "Proteins", "file": "proteins.json" },
   { "name": "Dairy, Alternatives & Oils", "file": "dairy.json" },
-  { "name": "Vegetables, Pulses & Lentils", "file": "vegetables_pulses.json" }
+  { "name": "Vegetables, Pulses & Lentils", "file": "vegetables_pulses.json" },
+  { "name": "Street Foods & Desserts", "file": "street_foods.json" }
 ]
