@@ -1,0 +1,25 @@
+[
+  { "name": "Potato Chips (plain salted)", "calories": 536, "protein_g": 7.0, "carbs_g": 53.0, "fat_g": 35.0, "fiber_g": 3.8 },
+  { "name": "Banana Chips (fried, salted)", "calories": 519, "protein_g": 2.3, "carbs_g": 58.4, "fat_g": 33.6, "fiber_g": 7.7 },
+  { "name": "Nacho Chips (corn, plain)", "calories": 490, "protein_g": 6.5, "carbs_g": 64.0, "fat_g": 23.0, "fiber_g": 4.5 },
+  { "name": "Chakli / Murukku", "calories": 500, "protein_g": 8.0, "carbs_g": 58.0, "fat_g": 24.0, "fiber_g": 3.0 },
+  { "name": "Sev (plain)", "calories": 564, "protein_g": 10.0, "carbs_g": 47.0, "fat_g": 38.0, "fiber_g": 4.0 },
+  { "name": "Bhujia (Haldiram-style)", "calories": 550, "protein_g": 12.0, "carbs_g": 44.0, "fat_g": 38.0, "fiber_g": 5.0 },
+  { "name": "Mixture / Namkeen Mix", "calories": 520, "protein_g": 12.0, "carbs_g": 50.0, "fat_g": 32.0, "fiber_g": 6.0 },
+
+  { "name": "Dhokla (ready-made, steamed)", "calories": 160, "protein_g": 6.0, "carbs_g": 28.0, "fat_g": 4.0, "fiber_g": 1.8 },
+  { "name": "Khaman (Gujarati)", "calories": 170, "protein_g": 7.0, "carbs_g": 29.0, "fat_g": 4.0, "fiber_g": 2.0 },
+  { "name": "Samosa (packaged/frozen, fried)", "calories": 262, "protein_g": 5.0, "carbs_g": 32.0, "fat_g": 12.0, "fiber_g": 3.0 },
+  { "name": "Kachori (packaged/fried)", "calories": 280, "protein_g": 6.0, "carbs_g": 34.0, "fat_g": 13.0, "fiber_g": 2.5 },
+
+  { "name": "Salted Pretzels", "calories": 380, "protein_g": 10.0, "carbs_g": 80.0, "fat_g": 1.5, "fiber_g": 2.7 },
+  { "name": "Crackers (plain salted)", "calories": 502, "protein_g": 7.5, "carbs_g": 64.0, "fat_g": 24.0, "fiber_g": 2.6 },
+  { "name": "Popcorn (ready-to-eat, salted)", "calories": 460, "protein_g": 8.0, "carbs_g": 61.0, "fat_g": 20.0, "fiber_g": 10.0 },
+
+  { "name": "Glucose Biscuits (Parle-G style)", "calories": 450, "protein_g": 6.0, "carbs_g": 75.0, "fat_g": 14.0, "fiber_g": 2.0 },
+  { "name": "Marie Biscuits", "calories": 430, "protein_g": 7.0, "carbs_g": 76.0, "fat_g": 10.0, "fiber_g": 2.5 },
+  { "name": "Cream Biscuits (sandwich)", "calories": 485, "protein_g": 5.0, "carbs_g": 72.0, "fat_g": 20.0, "fiber_g": 1.5 },
+  { "name": "Chocolate Chip Cookies", "calories": 488, "protein_g": 5.5, "carbs_g": 64.0, "fat_g": 24.0, "fiber_g": 3.5 },
+  { "name": "Doughnut (packaged)", "calories": 410, "protein_g": 5.0, "carbs_g": 47.0, "fat_g": 22.0, "fiber_g": 2.0 },
+  { "name": "Cupcake (packaged)", "calories": 370, "protein_g": 4.0, "carbs_g": 50.0, "fat_g": 17.0, "fiber_g": 1.5 }
+]
