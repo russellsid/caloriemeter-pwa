@@ -1,13 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createRecipe, getDefaultProfileId } from '../../../lib/repos/recipes';
+import { macrosToCalories } from '../../../lib/utils/macros';
 
 export default function NewRecipePage() {
   // form state (whole-recipe totals)
   const [name, setName] = useState('');
   const [totalWeightG, setTotalWeightG] = useState<number>(1000);
+
+  // calories support "auto-calc unless manually overridden"
   const [calories, setCalories] = useState<number>(0);
+  const [caloriesTouched, setCaloriesTouched] = useState<boolean>(false);
+
   const [protein, setProtein] = useState<string>('0.0'); // grams
   const [carbs, setCarbs] = useState<string>('0.0');     // grams
   const [fat, setFat] = useState<string>('0.0');         // grams
@@ -24,31 +29,15 @@ export default function NewRecipePage() {
     fiber_g?: number;
   }>({});
 
-  // When total weight changes and autoScale is on, recompute totals from per-100g
-  useEffect(() => {
-    if (!autoScale) return;
-    const factor = Math.max(1, totalWeightG) / 100;
+  // helper
+  function fmt1(n: number) { return (Math.round(n * 10) / 10).toFixed(1); }
+  function toNum(s: string): number {
+    const n = parseFloat(String(s).replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
+  }
+  function stopAutoScale() { if (autoScale) setAutoScale(false); }
 
-    if (typeof basePer100.calories === 'number') {
-      setCalories(Math.max(0, Math.round(basePer100.calories * factor)));
-    }
-    function fmt1(n: number) { return (Math.round(n * 10) / 10).toFixed(1); }
-
-    if (typeof basePer100.protein_g === 'number') {
-      setProtein(fmt1(basePer100.protein_g * factor));
-    }
-    if (typeof basePer100.carbs_g === 'number') {
-      setCarbs(fmt1(basePer100.carbs_g * factor));
-    }
-    if (typeof basePer100.fat_g === 'number') {
-      setFat(fmt1(basePer100.fat_g * factor));
-    }
-    if (typeof basePer100.fiber_g === 'number') {
-      setFiber(fmt1(basePer100.fiber_g * factor));
-    }
-  }, [totalWeightG, autoScale, basePer100]);
-
-  // On first load, read query params from /recipes/new?name=&calories=&protein_g=&carbs_g=&fat_g=&fiber_g=
+  // 1) On first load, read query params from /recipes/new?name=&calories=&protein_g=&carbs_g=&fat_g=&fiber_g=
   useEffect(() => {
     try {
       const u = new URL(window.location.href);
@@ -77,27 +66,56 @@ export default function NewRecipePage() {
         };
         setBasePer100(b);
         setAutoScale(true);
-        setTotalWeightG(100); // <-- key: per-100g basis
+        setTotalWeightG(100); // per-100g basis
+        // NOTE: we'll compute calories from macros below to keep a single source of truth
       }
     } catch {
       // ignore
     }
   }, []);
 
-  // If user manually edits any total macro/calorie -> turn off auto-scale
-  function stopAutoScale() { if (autoScale) setAutoScale(false); }
-  function fmt1(n: number) { return (Math.round(n * 10) / 10).toFixed(1); }
+  // 2) When total weight changes and autoScale is on, recompute totals from per-100g (macros only).
+  //    Calories will be computed from macros (unless manually overridden) in the effect below.
+  useEffect(() => {
+    if (!autoScale) return;
+    const factor = Math.max(1, totalWeightG) / 100;
+
+    if (typeof basePer100.protein_g === 'number') {
+      setProtein(fmt1(basePer100.protein_g * factor));
+    }
+    if (typeof basePer100.carbs_g === 'number') {
+      setCarbs(fmt1(basePer100.carbs_g * factor));
+    }
+    if (typeof basePer100.fat_g === 'number') {
+      setFat(fmt1(basePer100.fat_g * factor));
+    }
+    if (typeof basePer100.fiber_g === 'number') {
+      setFiber(fmt1(basePer100.fiber_g * factor));
+    }
+    // Do NOT set calories directly here; keep a single rule via macrosToCalories below.
+  }, [totalWeightG, autoScale, basePer100]);
+
+  // 3) Auto-calc calories whenever macros change, *unless* user manually edited calories.
+  useEffect(() => {
+    if (caloriesTouched) return;
+    const p = toNum(protein);
+    const c = toNum(carbs);
+    const f = toNum(fat);
+    const auto = Math.round(macrosToCalories(p, c, f));
+    setCalories(auto);
+  }, [protein, carbs, fat, caloriesTouched]);
 
   async function onSave() {
     try {
       const nm = name.trim();
       if (!nm) throw new Error('Enter a name');
+
       const w = Math.max(1, Math.round(totalWeightG));
       const kcal = Math.max(0, Math.round(calories));
-      const pMg = Math.max(0, Math.round(Number(protein || '0') * 1000));
-      const cMg = Math.max(0, Math.round(Number(carbs || '0') * 1000));
-      const fMg = Math.max(0, Math.round(Number(fat || '0') * 1000));
-      const fiberMg = Math.max(0, Math.round(Number(fiber || '0') * 1000));
+      const pMg = Math.max(0, Math.round(toNum(protein) * 1000));
+      const cMg = Math.max(0, Math.round(toNum(carbs) * 1000));
+      const fMg = Math.max(0, Math.round(toNum(fat) * 1000));
+      const fiberMg = Math.max(0, Math.round(toNum(fiber) * 1000));
 
       setSaving(true);
       const profileId = await getDefaultProfileId();
@@ -141,29 +159,48 @@ export default function NewRecipePage() {
           type="number"
           inputMode="numeric"
           value={calories}
-          onChange={(e)=>{ stopAutoScale(); setCalories(Number(e.target.value || '0')); }}
+          onChange={(e)=>{ setCaloriesTouched(true); setCalories(Number(e.target.value || '0')); }}
         />
+        <p className="small" style={{ marginTop: -6, opacity: 0.75 }}>
+          Auto-calculated from Protein/Carbs/Fat unless you edit this field.
+        </p>
 
         <div className="row">
           <div style={{flex:1}}>
             <label>Protein (g)</label>
-            <input className="input" inputMode="decimal" value={protein}
-                   onChange={(e)=>{ stopAutoScale(); setProtein(e.target.value); }} />
+            <input
+              className="input"
+              inputMode="decimal"
+              value={protein}
+              onChange={(e)=>{ stopAutoScale(); setProtein(e.target.value); }}
+            />
           </div>
           <div style={{flex:1}}>
             <label>Carbs (g)</label>
-            <input className="input" inputMode="decimal" value={carbs}
-                   onChange={(e)=>{ stopAutoScale(); setCarbs(e.target.value); }} />
+            <input
+              className="input"
+              inputMode="decimal"
+              value={carbs}
+              onChange={(e)=>{ stopAutoScale(); setCarbs(e.target.value); }}
+            />
           </div>
           <div style={{flex:1}}>
             <label>Fat (g)</label>
-            <input className="input" inputMode="decimal" value={fat}
-                   onChange={(e)=>{ stopAutoScale(); setFat(e.target.value); }} />
+            <input
+              className="input"
+              inputMode="decimal"
+              value={fat}
+              onChange={(e)=>{ stopAutoScale(); setFat(e.target.value); }}
+            />
           </div>
           <div style={{flex:1}}>
             <label>Fiber (g)</label>
-            <input className="input" inputMode="decimal" value={fiber}
-                   onChange={(e)=>{ stopAutoScale(); setFiber(e.target.value); }} />
+            <input
+              className="input"
+              inputMode="decimal"
+              value={fiber}
+              onChange={(e)=>{ stopAutoScale(); setFiber(e.target.value); }}
+            />
           </div>
         </div>
 
