@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { createRecipe, getDefaultProfileId } from '../../../lib/repos/recipes';
 import { macrosToCalories } from '../../../lib/utils/macros';
+import { addEntryFromRecipe } from '../../../lib/repos/diary';
+import { todayDiaryDay } from '../../../lib/utils/dayBoundary';
 
 export default function NewRecipePage() {
   // form state (whole-recipe totals)
@@ -29,7 +31,7 @@ export default function NewRecipePage() {
     fiber_g?: number;
   }>({});
 
-  // helper
+  // helpers
   function fmt1(n: number) { return (Math.round(n * 10) / 10).toFixed(1); }
   function toNum(s: string): number {
     const n = parseFloat(String(s).replace(',', '.'));
@@ -67,7 +69,7 @@ export default function NewRecipePage() {
         setBasePer100(b);
         setAutoScale(true);
         setTotalWeightG(100); // per-100g basis
-        // NOTE: we'll compute calories from macros below to keep a single source of truth
+        // Calories will be derived from macros below.
       }
     } catch {
       // ignore
@@ -75,7 +77,6 @@ export default function NewRecipePage() {
   }, []);
 
   // 2) When total weight changes and autoScale is on, recompute totals from per-100g (macros only).
-  //    Calories will be computed from macros (unless manually overridden) in the effect below.
   useEffect(() => {
     if (!autoScale) return;
     const factor = Math.max(1, totalWeightG) / 100;
@@ -92,7 +93,7 @@ export default function NewRecipePage() {
     if (typeof basePer100.fiber_g === 'number') {
       setFiber(fmt1(basePer100.fiber_g * factor));
     }
-    // Do NOT set calories directly here; keep a single rule via macrosToCalories below.
+    // Keep calories derived from macros via the effect below.
   }, [totalWeightG, autoScale, basePer100]);
 
   // 3) Auto-calc calories whenever macros change, *unless* user manually edited calories.
@@ -105,32 +106,131 @@ export default function NewRecipePage() {
     setCalories(auto);
   }, [protein, carbs, fat, caloriesTouched]);
 
+  // --- shared helpers ---
+  function per100gFromWhole({
+    calories, protein_g, carbs_g, fat_g, fiber_g, totalWeightG,
+  }: {
+    calories: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number; totalWeightG: number;
+  }) {
+    // Convert whole-recipe totals into per-100g basis.
+    const factor100 = 100 / Math.max(1, totalWeightG);
+    const p100 = +(protein_g * factor100).toFixed(1);
+    const c100 = +(carbs_g   * factor100).toFixed(1);
+    const f100 = +(fat_g     * factor100).toFixed(1);
+    const fib100 = +(fiber_g * factor100).toFixed(1);
+    // Calories from macros (avoid drift)
+    const kcal100 = Math.round(macrosToCalories(p100, c100, f100));
+    return { calories: kcal100, protein_g: p100, carbs_g: c100, fat_g: f100, fiber_g: fib100 };
+  }
+
+  async function saveRecipeAsEntered() {
+    const nm = name.trim();
+    if (!nm) throw new Error('Enter a name');
+
+    const w = Math.max(1, Math.round(totalWeightG));
+    const kcal = Math.max(0, Math.round(calories));
+    const pMg = Math.max(0, Math.round(toNum(protein) * 1000));
+    const cMg = Math.max(0, Math.round(toNum(carbs) * 1000));
+    const fMg = Math.max(0, Math.round(toNum(fat) * 1000));
+    const fiberMg = Math.max(0, Math.round(toNum(fiber) * 1000));
+
+    const profileId = await getDefaultProfileId();
+    const rec = await createRecipe(profileId, {
+      name: nm,
+      total_weight_g: w,
+      calories: kcal,
+      protein_mg: pMg,
+      carbs_mg: cMg,
+      fat_mg: fMg,
+      fiber_mg: fiberMg,
+    });
+    return { rec, profileId };
+  }
+
+  async function saveRecipeNormalizedPer100g() {
+    // Normalize the *saved* recipe to 100 g (per-100g macros/kcal), even if the user typed 150 g etc.
+    const nm = name.trim();
+    if (!nm) throw new Error('Enter a name');
+
+    // Build per-100g from the current whole totals (what user sees on screen)
+    const p100 = per100gFromWhole({
+      calories,
+      protein_g: toNum(protein),
+      carbs_g: toNum(carbs),
+      fat_g: toNum(fat),
+      fiber_g: toNum(fiber),
+      totalWeightG,
+    });
+
+    const profileId = await getDefaultProfileId();
+    const rec = await createRecipe(profileId, {
+      name: nm,
+      total_weight_g: 100, // normalized
+      calories: p100.calories,
+      protein_mg: Math.round(p100.protein_g * 1000),
+      carbs_mg:   Math.round(p100.carbs_g   * 1000),
+      fat_mg:     Math.round(p100.fat_g     * 1000),
+      fiber_mg:   Math.round(p100.fiber_g   * 1000),
+    });
+    return { rec, profileId, per100: p100 };
+  }
+
+  // --- actions ---
   async function onSave() {
     try {
-      const nm = name.trim();
-      if (!nm) throw new Error('Enter a name');
-
-      const w = Math.max(1, Math.round(totalWeightG));
-      const kcal = Math.max(0, Math.round(calories));
-      const pMg = Math.max(0, Math.round(toNum(protein) * 1000));
-      const cMg = Math.max(0, Math.round(toNum(carbs) * 1000));
-      const fMg = Math.max(0, Math.round(toNum(fat) * 1000));
-      const fiberMg = Math.max(0, Math.round(toNum(fiber) * 1000));
-
       setSaving(true);
-      const profileId = await getDefaultProfileId();
-      await createRecipe(profileId, {
-        name: nm,
-        total_weight_g: w,
-        calories: kcal,
-        protein_mg: pMg,
-        carbs_mg: cMg,
-        fat_mg: fMg,
-        fiber_mg: fiberMg,
-      });
+      await saveRecipeAsEntered();
       setSaving(false);
       alert('Recipe saved!');
       window.location.href = '/recipes';
+    } catch (e: any) {
+      setSaving(false);
+      alert('Failed: ' + (e?.message || String(e)));
+    }
+  }
+
+  async function onSaveAndAddToday() {
+    try {
+      setSaving(true);
+
+      let recId: string;
+      let profileId: string;
+      let per100: { calories: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number };
+
+      if (autoScale) {
+        // Save recipe normalized to per-100g; add today's entry with *user-entered grams*
+        const res = await saveRecipeNormalizedPer100g();
+        recId = res.rec.id;
+        profileId = res.profileId;
+        per100 = res.per100;
+      } else {
+        // Save recipe exactly as entered; derive per-100g for diary add
+        const res = await saveRecipeAsEntered();
+        recId = res.rec.id;
+        profileId = res.profileId;
+        per100 = per100gFromWhole({
+          calories,
+          protein_g: toNum(protein),
+          carbs_g: toNum(carbs),
+          fat_g: toNum(fat),
+          fiber_g: toNum(fiber),
+          totalWeightG,
+        });
+      }
+
+      const day = todayDiaryDay(2);
+      await addEntryFromRecipe({
+        profile_id: profileId,
+        day,
+        recipe_id: recId,
+        label: name.trim(),
+        grams: Math.max(1, Math.round(totalWeightG)), // log exactly what user entered (e.g., 150 g)
+        per100g: per100,
+      });
+
+      setSaving(false);
+      alert('Saved and added to Today!');
+      window.location.href = '/';
     } catch (e: any) {
       setSaving(false);
       alert('Failed: ' + (e?.message || String(e)));
@@ -211,9 +311,12 @@ export default function NewRecipePage() {
           </p>
         )}
 
-        <div className="row" style={{gap:8, marginTop:8}}>
+        <div className="row" style={{gap:8, marginTop:8, flexWrap:'wrap'}}>
           <button className="btn" type="button" onClick={onSave} disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button className="btn" type="button" onClick={onSaveAndAddToday} disabled={saving}>
+            {saving ? 'Working…' : 'Save & Add to Today'}
           </button>
           <a className="btn" href="/recipes">Cancel</a>
         </div>
