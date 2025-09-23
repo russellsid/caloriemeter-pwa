@@ -6,6 +6,7 @@ import {
   updateRecipe,
   Recipe,
 } from '../../../../lib/repos/recipes';
+import { macrosToCalories } from '../../../../lib/utils/macros';
 
 type Props = {
   params: { id: string };
@@ -18,12 +19,21 @@ export default function EditRecipePage({ params }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState('');
   const [totalWeightG, setTotalWeightG] = useState<number>(1000);
+
+  // calories support "auto-calc unless manually overridden"
   const [calories, setCalories] = useState<number>(0);
+  const [caloriesTouched, setCaloriesTouched] = useState<boolean>(false);
+
   const [protein, setProtein] = useState<string>('0.0');
   const [carbs, setCarbs] = useState<string>('0.0');
   const [fat, setFat] = useState<string>('0.0');
-  const [fiber, setFiber] = useState<string>('0.0'); // NEW: grams
+  const [fiber, setFiber] = useState<string>('0.0'); // grams
   const [saving, setSaving] = useState(false);
+
+  function toNum(s: string): number {
+    const n = parseFloat(String(s).replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
+    }
 
   useEffect(() => {
     const rec: Recipe | undefined = getRecipeById(id);
@@ -38,9 +48,19 @@ export default function EditRecipePage({ params }: Props) {
     setProtein((rec.protein_mg / 1000).toFixed(1));
     setCarbs((rec.carbs_mg / 1000).toFixed(1));
     setFat((rec.fat_mg / 1000).toFixed(1));
-    setFiber(((rec.fiber_mg ?? 0) / 1000).toFixed(1)); // NEW
+    setFiber(((rec.fiber_mg ?? 0) / 1000).toFixed(1));
     setLoaded(true);
   }, [id]);
+
+  // Auto-calc calories from macros unless user has manually edited calories
+  useEffect(() => {
+    if (!loaded || caloriesTouched) return;
+    const p = toNum(protein);
+    const c = toNum(carbs);
+    const f = toNum(fat);
+    const auto = Math.round(macrosToCalories(p, c, f));
+    setCalories(auto);
+  }, [loaded, protein, carbs, fat, caloriesTouched]);
 
   async function onSave() {
     try {
@@ -50,10 +70,10 @@ export default function EditRecipePage({ params }: Props) {
       if (!Number.isFinite(weight) || weight <= 0) throw new Error('Total weight must be positive');
       if (!Number.isFinite(kcal) || kcal < 0) throw new Error('Calories must be ≥ 0');
 
-      const pMg = Math.round(Number(protein || '0') * 1000);
-      const cMg = Math.round(Number(carbs || '0') * 1000);
-      const fMg = Math.round(Number(fat || '0') * 1000);
-      const fiberMg = Math.round(Number(fiber || '0') * 1000); // NEW
+      const pMg = Math.round(toNum(protein) * 1000);
+      const cMg = Math.round(toNum(carbs) * 1000);
+      const fMg = Math.round(toNum(fat) * 1000);
+      const fiberMg = Math.round(toNum(fiber) * 1000);
 
       setSaving(true);
       await updateRecipe(id, {
@@ -63,7 +83,7 @@ export default function EditRecipePage({ params }: Props) {
         protein_mg: pMg,
         carbs_mg: cMg,
         fat_mg: fMg,
-        fiber_mg: fiberMg, // NEW
+        fiber_mg: fiberMg,
       });
       setSaving(false);
       alert('Recipe updated!');
@@ -105,25 +125,48 @@ export default function EditRecipePage({ params }: Props) {
           type="number"
           inputMode="numeric"
           value={calories}
-          onChange={(e)=>setCalories(Number(e.target.value || '0'))}
+          onChange={(e)=>{ setCaloriesTouched(true); setCalories(Number(e.target.value || '0')); }}
         />
+        <p className="small" style={{ marginTop: -6, opacity: 0.75 }}>
+          Auto-calculated from Protein/Carbs/Fat unless you edit this field.
+        </p>
 
         <div className="row">
           <div style={{flex:1}}>
             <label>Protein (g)</label>
-            <input className="input" inputMode="decimal" value={protein} onChange={(e)=>setProtein(e.target.value)} />
+            <input
+              className="input"
+              inputMode="decimal"
+              value={protein}
+              onChange={(e)=>setProtein(e.target.value)}
+            />
           </div>
           <div style={{flex:1}}>
             <label>Carbs (g)</label>
-            <input className="input" inputMode="decimal" value={carbs} onChange={(e)=>setCarbs(e.target.value)} />
+            <input
+              className="input"
+              inputMode="decimal"
+              value={carbs}
+              onChange={(e)=>setCarbs(e.target.value)}
+            />
           </div>
           <div style={{flex:1}}>
             <label>Fat (g)</label>
-            <input className="input" inputMode="decimal" value={fat} onChange={(e)=>setFat(e.target.value)} />
+            <input
+              className="input"
+              inputMode="decimal"
+              value={fat}
+              onChange={(e)=>setFat(e.target.value)}
+            />
           </div>
           <div style={{flex:1}}>
-            <label>Fiber (g)</label> {/* NEW */}
-            <input className="input" inputMode="decimal" value={fiber} onChange={(e)=>setFiber(e.target.value)} />
+            <label>Fiber (g)</label>
+            <input
+              className="input"
+              inputMode="decimal"
+              value={fiber}
+              onChange={(e)=>setFiber(e.target.value)}
+            />
           </div>
         </div>
 
