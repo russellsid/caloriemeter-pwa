@@ -19,8 +19,11 @@ function clamp01(n: number) {
 function fmt1(n: number) {
   return (Math.round(n * 10) / 10).toFixed(1);
 }
+function fmtByUnit(n: number, unit: 'kcal' | 'g') {
+  return unit === 'kcal' ? String(Math.round(n)) : fmt1(n);
+}
 
-// Progress row
+// Progress row — shows signed diff (+ / -)
 function ProgressRow(props: {
   label: 'Energy' | 'Protein' | 'Carbs' | 'Fat' | 'Fiber';
   unit: 'kcal' | 'g';
@@ -28,8 +31,11 @@ function ProgressRow(props: {
   target: number;
 }) {
   const { label, unit, consumed, target } = props;
-  const remaining = Math.max(0, (target || 0) - (consumed || 0));
+
+  const diff = (consumed || 0) - (target || 0); // + = over, - = under
   const frac = target > 0 ? clamp01(consumed / target) : 0;
+
+  const rightText = `${diff >= 0 ? '+' : ''}${fmtByUnit(diff, unit)} ${unit}`;
 
   return (
     <div style={{ marginBottom: 14 }}>
@@ -40,12 +46,10 @@ function ProgressRow(props: {
         <div style={{ fontWeight: 700 }}>
           {label}{' '}
           <span className="small" style={{ opacity: 0.8 }}>
-            – {unit === 'kcal' ? consumed : fmt1(consumed)} / {unit === 'kcal' ? target : fmt1(target)} {unit}
+            – {fmtByUnit(consumed, unit)} / {fmtByUnit(target, unit)} {unit}
           </span>
         </div>
-        <div style={{ fontWeight: 700 }}>
-          {unit === 'kcal' ? target - consumed : fmt1(remaining)} {unit}
-        </div>
+        <div style={{ fontWeight: 700 }}>{rightText}</div>
       </div>
       <div style={{ height: 10, borderRadius: 999, background: '#e8e8e8', overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${frac * 100}%`, background: '#111' }} />
@@ -64,14 +68,14 @@ export default function Home() {
     protein_g: number;
     carbs_g: number;
     fat_g: number;
-    fiber_g: number; // NEW
+    fiber_g: number;
   }>({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 });
 
   const [targets, setTargets] = useState<Targets>({
     protein_g: 0,
     carbs_g: 0,
     fat_g: 0,
-    fiber_g: 0, // required by Targets
+    fiber_g: 0,
     calories: 0,
   });
 
@@ -100,7 +104,7 @@ export default function Home() {
       targets.protein_g > 0 ||
       targets.carbs_g > 0 ||
       targets.fat_g > 0 ||
-      targets.fiber_g > 0, // NEW
+      targets.fiber_g > 0,
     [targets]
   );
 
@@ -130,7 +134,6 @@ export default function Home() {
         <div className="row">
           <a className="btn" href="/add">+ Add</a>
           <a className="btn" href="/recipes">Recipes</a>
-          {/* Removed: <a className="btn" href="/settings">Targets</a> */}
         </div>
       </div>
 
@@ -153,7 +156,7 @@ export default function Home() {
         <ProgressRow label="Protein" unit="g" consumed={totals.protein_g} target={targets.protein_g} />
         <ProgressRow label="Carbs" unit="g" consumed={totals.carbs_g} target={targets.carbs_g} />
         <ProgressRow label="Fat" unit="g" consumed={totals.fat_g} target={targets.fat_g} />
-        <ProgressRow label="Fiber" unit="g" consumed={totals.fiber_g} target={targets.fiber_g} /> {/* NEW */}
+        <ProgressRow label="Fiber" unit="g" consumed={totals.fiber_g} target={targets.fiber_g} />
         {!hasTargets && (
           <p className="small">
             Set your daily targets in <a href="/settings">Targets</a>. Calories auto-calculate from Protein/Carbs/Fat.
