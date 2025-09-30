@@ -12,15 +12,29 @@ import {
 import { todayDiaryDay } from '../lib/utils/dayBoundary';
 import { getTargets, Targets } from '../lib/repos/settings';
 
-// ---------- small helpers ----------
+// ---------- helpers ----------
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
 }
 function fmt1(n: number) {
   return (Math.round(n * 10) / 10).toFixed(1);
 }
+function fmtSigned(n: number, unit: 'kcal' | 'g') {
+  if (unit === 'kcal') {
+    const v = Math.round(n);
+    if (v > 0) return `+${v}`;
+    if (v < 0) return `${v}`; // already has '-'
+    return '0';
+  } else {
+    const v = Math.round(n * 10) / 10;
+    const s = v.toFixed(1);
+    if (v > 0) return `+${s}`;
+    if (v < 0) return s;
+    return '0.0';
+  }
+}
 
-// Progress row
+// A single progress row (Energy / Protein / Carbs / Fat / Fiber)
 function ProgressRow(props: {
   label: 'Energy' | 'Protein' | 'Carbs' | 'Fat' | 'Fiber';
   unit: 'kcal' | 'g';
@@ -28,7 +42,7 @@ function ProgressRow(props: {
   target: number;
 }) {
   const { label, unit, consumed, target } = props;
-  const remaining = Math.max(0, (target || 0) - (consumed || 0));
+  const diff = (consumed || 0) - (target || 0); // positive = over, negative = under
   const frac = target > 0 ? clamp01(consumed / target) : 0;
 
   return (
@@ -40,11 +54,11 @@ function ProgressRow(props: {
         <div style={{ fontWeight: 700 }}>
           {label}{' '}
           <span className="small" style={{ opacity: 0.8 }}>
-            – {unit === 'kcal' ? consumed : fmt1(consumed)} / {unit === 'kcal' ? target : fmt1(target)} {unit}
+            – {unit === 'kcal' ? Math.round(consumed) : fmt1(consumed)} / {unit === 'kcal' ? Math.round(target) : fmt1(target)} {unit}
           </span>
         </div>
         <div style={{ fontWeight: 700 }}>
-          {unit === 'kcal' ? target - consumed : fmt1(remaining)} {unit}
+          {fmtSigned(diff, unit)} {unit}
         </div>
       </div>
       <div style={{ height: 10, borderRadius: 999, background: '#e8e8e8', overflow: 'hidden' }}>
@@ -64,14 +78,14 @@ export default function Home() {
     protein_g: number;
     carbs_g: number;
     fat_g: number;
-    fiber_g: number; // NEW
+    fiber_g: number;
   }>({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 });
 
   const [targets, setTargets] = useState<Targets>({
     protein_g: 0,
     carbs_g: 0,
     fat_g: 0,
-    fiber_g: 0, // required by Targets
+    fiber_g: 0,
     calories: 0,
   });
 
@@ -100,7 +114,7 @@ export default function Home() {
       targets.protein_g > 0 ||
       targets.carbs_g > 0 ||
       targets.fat_g > 0 ||
-      targets.fiber_g > 0, // NEW
+      targets.fiber_g > 0,
     [targets]
   );
 
@@ -130,13 +144,12 @@ export default function Home() {
         <div className="row">
           <a className="btn" href="/add">+ Add</a>
           <a className="btn" href="/recipes">Recipes</a>
-          {/* Removed: <a className="btn" href="/settings">Targets</a> */}
         </div>
       </div>
 
       <div className="card">
         <h3>Today ({day}) — 2 AM → 2 AM</h3>
-        <p><b>{totals.calories}</b> kcal</p>
+        <p><b>{Math.round(totals.calories)}</b> kcal</p>
         <p>
           Protein: <b>{fmt1(totals.protein_g)} g</b> · Carbs <b>{fmt1(totals.carbs_g)} g</b> · Fat <b>{fmt1(totals.fat_g)} g</b>
           {totals.fiber_g > 0 ? <> · Fiber <b>{fmt1(totals.fiber_g)} g</b></> : null}
@@ -153,7 +166,7 @@ export default function Home() {
         <ProgressRow label="Protein" unit="g" consumed={totals.protein_g} target={targets.protein_g} />
         <ProgressRow label="Carbs" unit="g" consumed={totals.carbs_g} target={targets.carbs_g} />
         <ProgressRow label="Fat" unit="g" consumed={totals.fat_g} target={targets.fat_g} />
-        <ProgressRow label="Fiber" unit="g" consumed={totals.fiber_g} target={targets.fiber_g} /> {/* NEW */}
+        <ProgressRow label="Fiber" unit="g" consumed={totals.fiber_g} target={targets.fiber_g} />
         {!hasTargets && (
           <p className="small">
             Set your daily targets in <a href="/settings">Targets</a>. Calories auto-calculate from Protein/Carbs/Fat.
