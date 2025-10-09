@@ -10,6 +10,8 @@
  * - "day" is a YYYY-MM-DD-like string from your dayBoundary util (2 AM → 2 AM)
  */
 
+import { todayDiaryDay, shiftDay } from '../utils/dayBoundary';
+
 export type DiaryEntry = {
   id: string;
   profile_id: string;
@@ -81,6 +83,27 @@ export async function sumTotals(entries: DiaryEntry[]): Promise<{
 
 function round1(n: number) {
   return Math.round(n * 10) / 10;
+}
+
+// ---------------- maintenance ----------------
+/**
+ * Keep only the most recent `maxDays` worth of diary data (inclusive of "today"),
+ * based on the app's day-boundary logic (default 2 AM).
+ * Returns the number of entries removed.
+ */
+export function pruneOldEntries(maxDays: number, startHourLocal = 2): number {
+  const list = loadAll();
+  if (list.length === 0 || maxDays <= 0) return 0;
+
+  const today = todayDiaryDay(startHourLocal);
+  // Example: if maxDays = 30, we keep today and the previous 29 days.
+  const keepFromDay = shiftDay(today, -(maxDays - 1));
+
+  // Because YYYY-MM-DD sorts lexicographically by date, plain string compare works.
+  const filtered = list.filter((e) => e.day >= keepFromDay);
+  const removed = list.length - filtered.length;
+  if (removed > 0) saveAll(filtered);
+  return removed;
 }
 
 // ---------------- mutations ----------------
