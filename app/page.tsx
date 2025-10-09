@@ -12,13 +12,13 @@ import {
 } from '../lib/repos/diary';
 import {
   todayDiaryDay,
-  shiftDay,          // NEW
+  shiftDay, // NEW
 } from '../lib/utils/dayBoundary';
 import { getTargets, Targets } from '../lib/repos/settings';
 
 // ---------- constants ----------
-const START_HOUR = 2;       // 2 AM → 2 AM day boundary
-const KEEP_DAYS = 30;       // keep the most recent 30 days
+const START_HOUR = 2;  // 2 AM → 2 AM day boundary
+const KEEP_DAYS = 30;  // keep the most recent 30 days
 
 // ---------- helpers ----------
 function clamp01(n: number) {
@@ -113,7 +113,7 @@ export default function Home() {
       const pid = await getDefaultProfileId();
       setProfileId(pid);
       // auto-prune anything older than 30 boundary-days
-      await pruneOldEntries({ maxDays: KEEP_DAYS, startHourLocal: START_HOUR });
+      await pruneOldEntries(KEEP_DAYS, START_HOUR); // <-- positional args
       await loadForDay(todayDiaryDay(START_HOUR), pid);
     })();
   }, []);
