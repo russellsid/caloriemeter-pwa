@@ -8,9 +8,17 @@ import {
   DiaryEntry,
   deleteEntry,
   updateEntryWeight,
+  pruneOldEntries, // NEW
 } from '../lib/repos/diary';
-import { todayDiaryDay } from '../lib/utils/dayBoundary';
+import {
+  todayDiaryDay,
+  shiftDay,          // NEW
+} from '../lib/utils/dayBoundary';
 import { getTargets, Targets } from '../lib/repos/settings';
+
+// ---------- constants ----------
+const START_HOUR = 2;       // 2 AM → 2 AM day boundary
+const KEEP_DAYS = 30;       // keep the most recent 30 days
 
 // ---------- helpers ----------
 function clamp01(n: number) {
@@ -23,7 +31,7 @@ function fmtSigned(n: number, unit: 'kcal' | 'g') {
   if (unit === 'kcal') {
     const v = Math.round(n);
     if (v > 0) return `+${v}`;
-    if (v < 0) return `${v}`; // already has '-'
+    if (v < 0) return `${v}`;
     return '0';
   } else {
     const v = Math.round(n * 10) / 10;
@@ -71,7 +79,7 @@ function ProgressRow(props: {
 // ---------- page ----------
 export default function Home() {
   const [profileId, setProfileId] = useState<string>('');
-  const [day, setDay] = useState<string>('');
+  const [day, setDay] = useState<string>(todayDiaryDay(START_HOUR));
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [totals, setTotals] = useState<{
     calories: number;
@@ -89,24 +97,30 @@ export default function Home() {
     calories: 0,
   });
 
-  async function refresh(pid?: string) {
+  // Load a specific day
+  async function loadForDay(d: string, pid?: string) {
     const p = pid || profileId || (await getDefaultProfileId());
-    const d = todayDiaryDay(2);
     setDay(d);
-
     const es = await listByDay(p, d);
     setEntries(es);
     setTotals(await sumTotals(es));
     setTargets(await getTargets());
   }
 
+  // Init: prune & load today
   useEffect(() => {
     (async () => {
       const pid = await getDefaultProfileId();
       setProfileId(pid);
-      await refresh(pid);
+      // auto-prune anything older than 30 boundary-days
+      await pruneOldEntries({ maxDays: KEEP_DAYS, startHourLocal: START_HOUR });
+      await loadForDay(todayDiaryDay(START_HOUR), pid);
     })();
   }, []);
+
+  // convenience flags
+  const today = todayDiaryDay(START_HOUR);
+  const isToday = day === today;
 
   const hasTargets = useMemo(
     () =>
@@ -121,7 +135,7 @@ export default function Home() {
   async function onDelete(entryId: string) {
     if (!confirm('Delete this entry?')) return;
     await deleteEntry(entryId);
-    await refresh();
+    await loadForDay(day);
   }
 
   async function onEdit(entry: DiaryEntry) {
@@ -134,7 +148,7 @@ export default function Home() {
       return;
     }
     await updateEntryWeight(entry.id, grams);
-    await refresh();
+    await loadForDay(day);
   }
 
   return (
@@ -148,7 +162,34 @@ export default function Home() {
       </div>
 
       <div className="card">
-        <h3>Today ({day}) — 2 AM → 2 AM</h3>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <button
+            className="btn"
+            onClick={() => loadForDay(shiftDay(day, -1))}
+            type="button"
+            aria-label="Previous day"
+          >
+            ‹
+          </button>
+
+          <div style={{ textAlign: 'center', flex: 1 }}>
+            <h3 style={{ margin: 0 }}>
+              {isToday ? 'Today' : day} — 2 AM → 2 AM
+            </h3>
+          </div>
+
+          <button
+            className="btn"
+            onClick={() => loadForDay(shiftDay(day, +1))}
+            type="button"
+            aria-label="Next day"
+            disabled={isToday}
+            style={isToday ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+          >
+            ›
+          </button>
+        </div>
+
         <p><b>{Math.round(totals.calories)}</b> kcal</p>
         <p>
           Protein: <b>{fmt1(totals.protein_g)} g</b> · Carbs <b>{fmt1(totals.carbs_g)} g</b> · Fat <b>{fmt1(totals.fat_g)} g</b>
