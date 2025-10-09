@@ -21,3 +21,19 @@ export function diaryDayLocalFromUtcMs(utcMs: number, startHourLocal: number) {
 export function todayDiaryDay(startHourLocal: number) {
   return diaryDayLocalFromUtcMs(Date.now(), startHourLocal);
 }
+
+/**
+ * Shift a YYYY-MM-DD string forward/backward by `deltaDays` and
+ * return a new YYYY-MM-DD string.
+ */
+export function shiftDay(day: string, deltaDays: number): string {
+  // Parse defensively
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!m) return day;
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const d = Number(m[3]);
+  const dt = new Date(y, mo, d);
+  dt.setDate(dt.getDate() + deltaDays);
+  return ymd(dt);
+}
